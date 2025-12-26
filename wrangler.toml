@@ -7,5 +7,10 @@ pages_build_output_dir = "dist"
 binding = "KNOWLEDGE_GRAPH_WORKER"
 service = "knowledge-graph-worker"
 
+# Service binding to HelloWorld Auth Worker
+[[services]]
+binding = "AUTH_WORKER"
+service = "helloworld-auth-worker"
+
 [vars]
 ENVIRONMENT = "production"

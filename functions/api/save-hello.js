@@ -35,9 +35,18 @@ export async function onRequest(context) {
       })
     }
 
-    // Validate token with auth service
-    const authResponse = await fetch(
-      'https://dashboard.vegvisr.org/auth/validate-token',
+    // Validate token with auth-worker service binding
+    if (!env?.AUTH_WORKER?.fetch) {
+      return new Response(JSON.stringify({
+        error: 'Auth Worker service binding not configured'
+      }), {
+        status: 500,
+        headers: corsHeaders
+      })
+    }
+
+    const authResponse = await env.AUTH_WORKER.fetch(
+      'https://helloworld-auth-worker/validate-token',
       {
         method: 'GET',
         headers: {

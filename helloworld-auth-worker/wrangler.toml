@@ -1,0 +1,6 @@
+name = "helloworld-auth-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Enable workers.dev for deployment
+workers_dev = true

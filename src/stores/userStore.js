@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 
+const AUTH_API = 'https://helloworld-auth-worker.torarnehave.workers.dev'
+
 export const useUserStore = defineStore('user', {
   state: () => ({
     email: '',
@@ -77,15 +79,15 @@ export const useUserStore = defineStore('user', {
 
     async fetchUserContext(email) {
       try {
-        // Get user role
+        // Get user role via auth-worker
         const roleResponse = await fetch(
-          `https://dashboard.vegvisr.org/get-role?email=${encodeURIComponent(email)}`
+          `${AUTH_API}/get-role?email=${encodeURIComponent(email)}`
         )
         const roleData = await roleResponse.json()
 
-        // Get user data
+        // Get user data via auth-worker
         const userResponse = await fetch(
-          `https://dashboard.vegvisr.org/userdata?email=${encodeURIComponent(email)}`
+          `${AUTH_API}/userdata?email=${encodeURIComponent(email)}`
         )
         const userData = await userResponse.json()
 

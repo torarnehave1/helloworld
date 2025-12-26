@@ -4,6 +4,28 @@ This guide helps Claude Code understand how to create new applications that inte
 
 ---
 
+## CRITICAL ARCHITECTURE PATTERN
+
+**Every Vegvisr app MUST have its own Auth Worker.** The frontend should NEVER call backend services directly.
+
+### Correct Pattern (WCX Example):
+```
+Frontend (wcx.vegvisr.org)
+    ↓ calls
+wcx-auth-worker.torarnehave.workers.dev
+    ↓ proxies to
+dashboard.vegvisr.org, email-worker, auth.vegvisr.org
+```
+
+### WRONG Pattern (Do NOT do this):
+```
+Frontend
+    ↓ calls directly
+dashboard.vegvisr.org (WRONG!)
+```
+
+---
+
 ## Quick Reference
 
 | Aspect | Details |
@@ -12,9 +34,9 @@ This guide helps Claude Code understand how to create new applications that inte
 | **State Management** | Pinia stores |
 | **Routing** | Vue Router 4 |
 | **Backend** | Cloudflare Workers |
-| **Database** | Cloudflare D1 (SQLite) |
+| **Auth Pattern** | App-specific auth-worker that proxies to Vegvisr services |
 | **Auth Token Cookie** | `vegvisr_token` (30-day expiry) |
-| **User Storage** | localStorage key: `wcx_user` or app-specific |
+| **User Storage** | localStorage key: `app_user` (app-specific prefix) |
 
 ---
 
@@ -35,23 +57,214 @@ my-new-app/
 │   └── components/          # Reusable components
 ├── functions/
 │   └── api/
-│       └── your-api.js      # Cloudflare Worker API
+│       └── your-api.js      # Cloudflare Pages Function API
+├── my-app-auth-worker/      # REQUIRED: App's auth worker
+│   ├── index.js             # Auth worker code
+│   └── wrangler.toml        # Auth worker config
 ├── package.json
 ├── vite.config.js
-├── wrangler.toml            # Cloudflare config
+├── wrangler.toml            # Main app Cloudflare config
 └── README.md                # Project documentation (REQUIRED)
 ```
 
 ---
 
-## 2. Authentication Integration (REQUIRED)
+## 2. Auth Worker (REQUIRED)
 
-### 2.1 User Store Template
+**Every app MUST have its own auth-worker.** Create `/my-app-auth-worker/index.js`:
+
+```javascript
+/**
+ * My App Auth Worker
+ * Handles authentication by proxying to Vegvisr services
+ */
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+}
+
+const createResponse = (body, status = 200, headers = {}) => {
+  return new Response(body, {
+    status,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders, ...headers },
+  })
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url)
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: { ...corsHeaders, 'Access-Control-Max-Age': '86400' },
+      })
+    }
+
+    // Health check
+    if (url.pathname === '/' || url.pathname === '/health') {
+      return createResponse(JSON.stringify({ ok: true, service: 'my-app-auth-worker' }))
+    }
+
+    // ============================================
+    // EMAIL CHECK - Proxy to main worker
+    // ============================================
+    if (url.pathname === '/check-email' && request.method === 'GET') {
+      const email = url.searchParams.get('email')
+      if (!email) {
+        return createResponse(JSON.stringify({ error: 'Email required' }), 400)
+      }
+
+      try {
+        const res = await fetch(
+          `https://test.vegvisr.org/check-email?email=${encodeURIComponent(email)}`
+        )
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    // ============================================
+    // MAGIC LINK - Proxy to email worker
+    // ============================================
+    if (url.pathname === '/magic/send' && request.method === 'POST') {
+      try {
+        const body = await request.json()
+        const res = await fetch('https://email-worker.torarnehave.workers.dev/login/magic/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...body,
+            // Override redirect URL to come back to YOUR app
+            redirectUrl: 'https://my-app.vegvisr.org/login',
+          }),
+        })
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    if (url.pathname === '/magic/verify' && request.method === 'GET') {
+      const token = url.searchParams.get('token')
+      if (!token) {
+        return createResponse(JSON.stringify({ error: 'Token required' }), 400)
+      }
+
+      try {
+        const res = await fetch(
+          `https://email-worker.torarnehave.workers.dev/login/magic/verify?token=${encodeURIComponent(token)}`
+        )
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    // ============================================
+    // USER DATA - Proxy to dashboard worker
+    // ============================================
+    if (url.pathname === '/userdata' && request.method === 'GET') {
+      const email = url.searchParams.get('email')
+      if (!email) {
+        return createResponse(JSON.stringify({ error: 'Email required' }), 400)
+      }
+
+      try {
+        const res = await fetch(
+          `https://dashboard.vegvisr.org/userdata?email=${encodeURIComponent(email)}`
+        )
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    if (url.pathname === '/get-role' && request.method === 'GET') {
+      const email = url.searchParams.get('email')
+      if (!email) {
+        return createResponse(JSON.stringify({ error: 'Email required' }), 400)
+      }
+
+      try {
+        const res = await fetch(
+          `https://dashboard.vegvisr.org/get-role?email=${encodeURIComponent(email)}`
+        )
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    // ============================================
+    // TOKEN VALIDATION - Proxy to dashboard worker
+    // ============================================
+    if (url.pathname === '/validate-token' && request.method === 'GET') {
+      try {
+        const authHeader = request.headers.get('Authorization')
+        const apiToken = request.headers.get('X-API-Token')
+
+        const res = await fetch('https://dashboard.vegvisr.org/auth/validate-token', {
+          method: 'GET',
+          headers: {
+            ...(authHeader && { Authorization: authHeader }),
+            ...(apiToken && { 'X-API-Token': apiToken }),
+          },
+        })
+        const data = await res.json()
+        return createResponse(JSON.stringify(data), res.status)
+      } catch (error) {
+        return createResponse(JSON.stringify({ error: error.message }), 500)
+      }
+    }
+
+    return new Response('Not found', { status: 404, headers: corsHeaders })
+  },
+}
+```
+
+### Auth Worker wrangler.toml
+
+Create `/my-app-auth-worker/wrangler.toml`:
+
+```toml
+name = "my-app-auth-worker"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+# Enable workers.dev for deployment
+workers_dev = true
+```
+
+### Deploy Auth Worker First
+
+```bash
+cd my-app-auth-worker
+npx wrangler deploy
+```
+
+This creates: `https://my-app-auth-worker.torarnehave.workers.dev`
+
+---
+
+## 3. User Store (Uses Auth Worker)
 
 Create `/src/stores/userStore.js`:
 
 ```javascript
 import { defineStore } from 'pinia'
+
+// IMPORTANT: All requests go through the app's auth-worker
+const AUTH_API = 'https://my-app-auth-worker.torarnehave.workers.dev'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -59,8 +272,6 @@ export const useUserStore = defineStore('user', {
     role: '',
     user_id: '',
     emailVerificationToken: '',
-    phone: '',
-    phoneVerifiedAt: null,
     loggedIn: false
   }),
 
@@ -86,8 +297,6 @@ export const useUserStore = defineStore('user', {
       this.role = user.role || ''
       this.user_id = user.user_id || ''
       this.emailVerificationToken = user.emailVerificationToken || ''
-      this.phone = user.phone || ''
-      this.phoneVerifiedAt = user.phoneVerifiedAt || null
       this.loggedIn = true
 
       // Persist to localStorage
@@ -95,9 +304,7 @@ export const useUserStore = defineStore('user', {
         email: this.email,
         role: this.role,
         user_id: this.user_id,
-        emailVerificationToken: this.emailVerificationToken,
-        phone: this.phone,
-        phoneVerifiedAt: this.phoneVerifiedAt
+        emailVerificationToken: this.emailVerificationToken
       }))
 
       // Set auth cookie
@@ -111,13 +318,10 @@ export const useUserStore = defineStore('user', {
       this.role = ''
       this.user_id = ''
       this.emailVerificationToken = ''
-      this.phone = ''
-      this.phoneVerifiedAt = null
       this.loggedIn = false
 
       localStorage.removeItem('app_user')
       sessionStorage.removeItem('email_session_verified')
-      sessionStorage.removeItem('phone_session_verified')
       this.clearAuthCookie()
     },
 
@@ -130,8 +334,6 @@ export const useUserStore = defineStore('user', {
           this.role = user.role || ''
           this.user_id = user.user_id || ''
           this.emailVerificationToken = user.emailVerificationToken || ''
-          this.phone = user.phone || ''
-          this.phoneVerifiedAt = user.phoneVerifiedAt || null
           this.loggedIn = !!user.email
         } catch (e) {
           console.error('Failed to load user from storage:', e)
@@ -141,15 +343,14 @@ export const useUserStore = defineStore('user', {
 
     async fetchUserContext(email) {
       try {
-        // Get user role
+        // IMPORTANT: Call auth-worker, NOT dashboard.vegvisr.org directly!
         const roleResponse = await fetch(
-          `https://dashboard.vegvisr.org/get-role?email=${encodeURIComponent(email)}`
+          `${AUTH_API}/get-role?email=${encodeURIComponent(email)}`
         )
         const roleData = await roleResponse.json()
 
-        // Get user data
         const userResponse = await fetch(
-          `https://dashboard.vegvisr.org/userdata?email=${encodeURIComponent(email)}`
+          `${AUTH_API}/userdata?email=${encodeURIComponent(email)}`
         )
         const userData = await userResponse.json()
 
@@ -168,9 +369,11 @@ export const useUserStore = defineStore('user', {
 })
 ```
 
-### 2.2 Login View Template
+---
 
-Create `/src/views/LoginView.vue` with these core methods:
+## 4. Login View (Uses Auth Worker)
+
+Create `/src/views/LoginView.vue`:
 
 ```vue
 <script setup>
@@ -182,34 +385,41 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-// API Endpoints
-const AUTH_API = 'https://wcx-auth-worker.torarnehave.workers.dev'
-const EMAIL_WORKER = 'https://email-worker.torarnehave.workers.dev'
+// IMPORTANT: All auth requests go through the app's auth-worker
+const AUTH_API = 'https://my-app-auth-worker.torarnehave.workers.dev'
 
 // State
 const email = ref('')
-const step = ref('email') // 'email' | 'magic' | 'phone' | 'code'
+const step = ref('email') // 'email' | 'magic' | 'verifying'
 const loading = ref(false)
 const error = ref('')
+const success = ref('')
 
 // Check for magic token in URL on mount
 onMounted(async () => {
-  const magicToken = route.query.magic
+  const magicToken = route.query.magic || route.query.token
   if (magicToken) {
     await verifyMagicToken(magicToken)
   }
 
   // Check if already logged in
   userStore.loadFromStorage()
-  if (userStore.loggedIn) {
+  const emailVerified = sessionStorage.getItem('email_session_verified') === '1'
+  if (userStore.loggedIn && emailVerified) {
     router.push('/')
   }
 })
 
-// Check if email exists
+// Check if email exists (via auth-worker)
 async function checkEmail() {
+  if (!email.value || !email.value.includes('@')) {
+    error.value = 'Please enter a valid email address'
+    return
+  }
+
   loading.value = true
   error.value = ''
+  success.value = ''
 
   try {
     const response = await fetch(
@@ -220,250 +430,156 @@ async function checkEmail() {
     if (data.exists) {
       await sendMagicLink()
     } else {
-      error.value = 'Email not registered. Please contact admin.'
+      error.value = 'Email not registered. Please contact admin to get access.'
     }
   } catch (e) {
-    error.value = 'Failed to check email'
+    error.value = 'Failed to check email. Please try again.'
+    console.error('Check email error:', e)
   } finally {
     loading.value = false
   }
 }
 
-// Send magic link
+// Send magic link (via auth-worker)
 async function sendMagicLink() {
   loading.value = true
-
-  // Use current URL as redirect (replace /login with /)
-  const redirectUrl = window.location.origin + '/'
+  error.value = ''
 
   try {
-    const response = await fetch(`${EMAIL_WORKER}/login/magic/send`, {
+    const response = await fetch(`${AUTH_API}/magic/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: email.value,
-        redirectUrl: redirectUrl
+        email: email.value
+        // Note: redirectUrl is set by auth-worker
       })
     })
 
     if (response.ok) {
       step.value = 'magic'
+      success.value = 'Magic link sent! Check your email.'
     } else {
-      error.value = 'Failed to send magic link'
+      const errorData = await response.json().catch(() => ({}))
+      error.value = errorData.error || 'Failed to send magic link. Please try again.'
     }
   } catch (e) {
-    error.value = 'Network error sending magic link'
+    error.value = 'Network error. Please check your connection and try again.'
+    console.error('Send magic link error:', e)
   } finally {
     loading.value = false
   }
 }
 
-// Verify magic token
+// Verify magic token (via auth-worker)
 async function verifyMagicToken(token) {
   loading.value = true
+  error.value = ''
+  step.value = 'verifying'
 
   try {
     const response = await fetch(
-      `${EMAIL_WORKER}/login/magic/verify?token=${encodeURIComponent(token)}`
+      `${AUTH_API}/magic/verify?token=${encodeURIComponent(token)}`
     )
     const data = await response.json()
 
     if (data.success && data.email) {
-      // Fetch full user context
+      // Fetch full user context (via auth-worker)
       const userContext = await userStore.fetchUserContext(data.email)
 
       if (userContext) {
-        userStore.setUser(userContext)
+        userStore.setUser({
+          ...userContext,
+          emailVerificationToken: data.token || token
+        })
+        sessionStorage.setItem('email_session_verified', '1')
+        success.value = 'Login successful! Redirecting...'
+
+        setTimeout(() => {
+          router.push('/')
+        }, 500)
+      } else {
+        userStore.setUser({
+          email: data.email,
+          emailVerificationToken: data.token || token
+        })
         sessionStorage.setItem('email_session_verified', '1')
         router.push('/')
       }
     } else {
-      error.value = 'Invalid or expired magic link'
+      error.value = data.error || 'Invalid or expired magic link. Please request a new one.'
+      step.value = 'email'
     }
   } catch (e) {
-    error.value = 'Failed to verify magic link'
+    error.value = 'Failed to verify magic link. Please try again.'
+    step.value = 'email'
+    console.error('Verify magic link error:', e)
   } finally {
     loading.value = false
-    // Clean URL
     router.replace({ query: {} })
+  }
+}
+
+function handleSubmit() {
+  if (step.value === 'email') {
+    checkEmail()
   }
 }
 </script>
 
 <template>
   <div class="login-container">
-    <h1>Login</h1>
+    <div class="login-card">
+      <h1>My App</h1>
 
-    <!-- Email Step -->
-    <div v-if="step === 'email'">
-      <input
-        v-model="email"
-        type="email"
-        placeholder="Enter your email"
-        @keyup.enter="checkEmail"
-      />
-      <button @click="checkEmail" :disabled="loading">
-        {{ loading ? 'Checking...' : 'Continue' }}
-      </button>
+      <!-- Verifying Step -->
+      <div v-if="step === 'verifying'">
+        <p>Verifying your login...</p>
+      </div>
+
+      <!-- Email Step -->
+      <div v-else-if="step === 'email'">
+        <form @submit.prevent="handleSubmit">
+          <label for="email">Email Address</label>
+          <input
+            id="email"
+            v-model="email"
+            type="email"
+            placeholder="you@example.com"
+            :disabled="loading"
+          />
+          <button type="submit" :disabled="loading">
+            {{ loading ? 'Checking...' : 'Continue with Magic Link' }}
+          </button>
+        </form>
+      </div>
+
+      <!-- Magic Link Sent Step -->
+      <div v-else-if="step === 'magic'">
+        <h2>Check your email</h2>
+        <p>We sent a magic link to: {{ email }}</p>
+        <button @click="sendMagicLink" :disabled="loading">
+          {{ loading ? 'Sending...' : 'Resend Magic Link' }}
+        </button>
+        <button @click="step = 'email'">
+          Use a different email
+        </button>
+      </div>
+
+      <div v-if="error" class="error">{{ error }}</div>
+      <div v-if="success" class="success">{{ success }}</div>
     </div>
-
-    <!-- Magic Link Step -->
-    <div v-if="step === 'magic'">
-      <p>Check your email for a magic link!</p>
-      <p>{{ email }}</p>
-      <button @click="sendMagicLink" :disabled="loading">
-        Resend Magic Link
-      </button>
-    </div>
-
-    <p v-if="error" class="error">{{ error }}</p>
   </div>
 </template>
 ```
 
-### 2.3 Router with Auth Guards
-
-Create `/src/router/index.js`:
-
-```javascript
-import { createRouter, createWebHistory } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-
-const LoginView = () => import('@/views/LoginView.vue')
-const MainView = () => import('@/views/MainView.vue')
-
-const routes = [
-  {
-    path: '/login',
-    name: 'login',
-    component: LoginView,
-    meta: { requiresAuth: false }
-  },
-  {
-    path: '/',
-    name: 'main',
-    component: MainView,
-    meta: { requiresAuth: true }
-  }
-]
-
-const router = createRouter({
-  history: createWebHistory(),
-  routes
-})
-
-// Auth guard
-router.beforeEach((to, from, next) => {
-  const userStore = useUserStore()
-
-  // Load from storage if not already loaded
-  if (!userStore.loggedIn) {
-    userStore.loadFromStorage()
-  }
-
-  // Check session verification
-  const emailVerified = sessionStorage.getItem('email_session_verified') === '1'
-  const phoneVerified = sessionStorage.getItem('phone_session_verified') === '1'
-  const sessionVerified = emailVerified || phoneVerified
-
-  if (to.meta.requiresAuth) {
-    if (!userStore.loggedIn || !userStore.email || !sessionVerified) {
-      next({ name: 'login' })
-      return
-    }
-  }
-
-  // Redirect logged-in users away from login
-  if (to.name === 'login' && userStore.loggedIn && sessionVerified) {
-    next({ name: 'main' })
-    return
-  }
-
-  next()
-})
-
-export default router
-```
-
 ---
 
-## 3. Knowledge Graph Integration
+## 5. Main App wrangler.toml
 
-### 3.1 Saving Documents to Knowledge Graph
-
-Use this pattern to save content as a Knowledge Graph node:
-
-```javascript
-// In your Cloudflare Worker (functions/api/your-api.js)
-
-async function saveToKnowledgeGraph(env, content, title, sourceUrl) {
-  const graphId = `graph_${Date.now()}`
-
-  const graphData = {
-    metadata: {
-      title: title,
-      description: `Document: ${title}`,
-      createdBy: 'your-app-name',
-      version: 0
-    },
-    nodes: [
-      {
-        id: crypto.randomUUID(),
-        color: '#4f6d7a',
-        label: title,
-        type: 'fulltext',
-        info: content,           // Your document content (Markdown)
-        bibl: [sourceUrl],       // Source/bibliography
-        imageWidth: null,
-        imageHeight: null,
-        visible: true,
-        position: { x: 0, y: 0 },
-        path: null
-      }
-    ],
-    edges: []
-  }
-
-  // Option 1: Service binding (preferred, requires wrangler.toml config)
-  if (env.KNOWLEDGE_GRAPH_WORKER) {
-    const response = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
-      'https://knowledge-graph-worker/saveGraphWithHistory',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: graphId,
-          graphData: graphData,
-          override: false
-        })
-      }
-    )
-    return response.json()
-  }
-
-  // Option 2: Direct HTTP call
-  const response = await fetch(
-    'https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: graphId,
-        graphData: graphData,
-        override: false
-      })
-    }
-  )
-  return response.json()
-}
-```
-
-### 3.2 Wrangler Configuration for Service Binding
-
-Add to `wrangler.toml`:
+Create `/wrangler.toml`:
 
 ```toml
-name = "your-app-name"
+name = "my-app-vegvisr"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
 
@@ -472,204 +588,133 @@ pages_build_output_dir = "dist"
 binding = "KNOWLEDGE_GRAPH_WORKER"
 service = "knowledge-graph-worker"
 
+# Service binding to App's Auth Worker
+[[services]]
+binding = "AUTH_WORKER"
+service = "my-app-auth-worker"
+
 [vars]
 ENVIRONMENT = "production"
 ```
 
-### 3.3 Frontend Integration
-
-```vue
-<script setup>
-import { ref } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-
-const userStore = useUserStore()
-const content = ref('')
-const title = ref('')
-const saving = ref(false)
-const result = ref(null)
-
-async function saveToGraph() {
-  saving.value = true
-
-  try {
-    const response = await fetch('/api/save-to-graph', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userStore.emailVerificationToken}`
-      },
-      body: JSON.stringify({
-        title: title.value,
-        content: content.value
-      })
-    })
-
-    result.value = await response.json()
-  } catch (error) {
-    result.value = { error: error.message }
-  } finally {
-    saving.value = false
-  }
-}
-</script>
-```
-
 ---
 
-## 4. API Worker Template
+## 6. API Function (Uses Service Bindings)
 
-Create `/functions/api/your-api.js`:
+Create `/functions/api/save-data.js`:
 
 ```javascript
 export async function onRequest(context) {
   const { request, env } = context
 
-  // CORS headers
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Content-Type': 'application/json'
   }
 
-  // Handle preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: corsHeaders
+    })
+  }
+
   try {
-    // Verify authentication
-    const token = getAuthToken(request)
+    // Get auth token
+    const authHeader = request.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '') ||
+                  getCookie(request, 'vegvisr_token')
 
     if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      return new Response(JSON.stringify({ error: 'Unauthorized - No token' }), {
         status: 401,
         headers: corsHeaders
       })
     }
 
-    // Validate token with auth service
-    // IMPORTANT: Use /auth/validate-token with Bearer token in header
-    const authResponse = await fetch(
-      'https://dashboard.vegvisr.org/auth/validate-token',
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json'
-        }
-      }
-    )
-    const authData = await authResponse.json()
-
-    if (!authData.valid) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: corsHeaders
-      })
-    }
-
-    // Your API logic here
-    const body = await request.json()
-
-    // Example: Save to Knowledge Graph using SERVICE BINDING
-    const graphResult = await saveToKnowledgeGraph(
-      env,
-      body.content,
-      body.title,
-      'https://your-app.vegvisr.org'
-    )
-
-    if (!graphResult.saved) {
+    // Validate token via AUTH_WORKER service binding
+    if (!env?.AUTH_WORKER?.fetch) {
       return new Response(JSON.stringify({
-        error: graphResult.error || 'Failed to save'
+        error: 'Auth Worker service binding not configured'
       }), {
         status: 500,
         headers: corsHeaders
       })
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      graphId: graphResult.id,
-      response: graphResult.response
-    }), { headers: corsHeaders })
-
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: corsHeaders
-    })
-  }
-}
-
-/**
- * Get auth token from request (supports multiple methods)
- */
-function getAuthToken(request) {
-  // Method 1: X-API-Token header (preferred for frontend)
-  const headerToken = request.headers.get('X-API-Token')
-  if (headerToken) return headerToken
-
-  // Method 2: Authorization Bearer header
-  const authHeader = request.headers.get('Authorization') || ''
-  if (authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7)
-  }
-
-  // Method 3: Cookie fallback (for cross-app SSO)
-  const cookieHeader = request.headers.get('Cookie') || ''
-  const cookies = Object.fromEntries(
-    cookieHeader.split(';').map((entry) => {
-      const [key, ...rest] = entry.trim().split('=')
-      return [key, rest.join('=')]
-    })
-  )
-  return cookies.vegvisr_token || null
-}
-
-/**
- * Save to Knowledge Graph using SERVICE BINDING (preferred method)
- * Requires wrangler.toml: [[services]] binding = "KNOWLEDGE_GRAPH_WORKER"
- */
-async function saveToKnowledgeGraph(env, content, title, sourceUrl) {
-  // Check if service binding is configured
-  if (!env?.KNOWLEDGE_GRAPH_WORKER?.fetch) {
-    return { saved: false, error: 'Knowledge graph service binding not configured in wrangler.toml' }
-  }
-
-  const graphId = `graph_${Date.now()}`
-  const nodeId = crypto.randomUUID()
-
-  const graphData = {
-    metadata: {
-      title: title,
-      description: `Document: ${title}`,
-      createdBy: 'your-app-name',
-      version: 0
-    },
-    nodes: [
+    const authResponse = await env.AUTH_WORKER.fetch(
+      'https://my-app-auth-worker/validate-token',
       {
-        id: nodeId,
-        color: '#4f6d7a',
-        label: title,
-        type: 'fulltext',
-        info: content,           // Your document content (Markdown)
-        bibl: sourceUrl ? [sourceUrl] : [],
-        imageWidth: null,
-        imageHeight: null,
-        visible: true,
-        position: { x: 0, y: 0 },
-        path: null
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}` }
       }
-    ],
-    edges: []
-  }
+    )
+    const authData = await authResponse.json()
 
-  try {
-    // Use service binding - internal Cloudflare routing (faster, more reliable)
-    const response = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
+    if (!authData.valid) {
+      return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
+        status: 401,
+        headers: corsHeaders
+      })
+    }
+
+    // Parse request body
+    const body = await request.json()
+    const { title, content, email } = body
+
+    if (!content) {
+      return new Response(JSON.stringify({ error: 'Content is required' }), {
+        status: 400,
+        headers: corsHeaders
+      })
+    }
+
+    // Save to Knowledge Graph via service binding
+    if (!env?.KNOWLEDGE_GRAPH_WORKER?.fetch) {
+      return new Response(JSON.stringify({
+        error: 'Knowledge Graph service binding not configured'
+      }), {
+        status: 500,
+        headers: corsHeaders
+      })
+    }
+
+    const graphId = `graph_${Date.now()}`
+    const nodeId = crypto.randomUUID()
+    const now = new Date().toISOString()
+
+    const graphData = {
+      metadata: {
+        title: title || 'Document',
+        description: `Created by ${email || 'unknown'} at ${now}`,
+        createdBy: 'my-app',
+        version: 0
+      },
+      nodes: [
+        {
+          id: nodeId,
+          color: '#4f6d7a',
+          label: title || 'Document',
+          type: 'fulltext',
+          info: content,
+          bibl: ['https://my-app.vegvisr.org'],
+          imageWidth: null,
+          imageHeight: null,
+          visible: true,
+          position: { x: 0, y: 0 },
+          path: null
+        }
+      ],
+      edges: []
+    }
+
+    const kgResponse = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
       'https://knowledge-graph-worker/saveGraphWithHistory',
       {
         method: 'POST',
@@ -682,360 +727,60 @@ async function saveToKnowledgeGraph(env, content, title, sourceUrl) {
       }
     )
 
-    const text = await response.text()
-    let parsed = null
-    try {
-      parsed = JSON.parse(text)
-    } catch {
-      parsed = { message: text }
-    }
+    const kgResult = await kgResponse.text()
 
-    if (!response.ok) {
-      return { saved: false, id: graphId, error: parsed?.error || text }
-    }
-
-    return { saved: true, id: graphId, nodeId: nodeId, response: parsed }
-  } catch (error) {
-    return { saved: false, id: graphId, error: error.message || 'Save failed' }
-  }
-}
-```
-
----
-
-## 5. Package.json Template
-
-```json
-{
-  "name": "your-app-name",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "deploy": "npm run build && wrangler pages deploy dist"
-  },
-  "dependencies": {
-    "pinia": "^2.1.0",
-    "vue": "^3.4.0",
-    "vue-router": "^4.2.0"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-vue": "^5.0.0",
-    "vite": "^5.0.0",
-    "wrangler": "^3.0.0"
-  }
-}
-```
-
----
-
-## 6. Vite Configuration
-
-Create `vite.config.js`:
-
-```javascript
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import path from 'path'
-
-export default defineConfig({
-  plugins: [vue()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src')
-    }
-  },
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8788',
-        changeOrigin: true
-      }
-    }
-  }
-})
-```
-
----
-
-## 7. Main.js Entry Point
-
-Create `/src/main.js`:
-
-```javascript
-import { createApp } from 'vue'
-import { createPinia } from 'pinia'
-import App from './App.vue'
-import router from './router'
-
-const app = createApp(App)
-
-app.use(createPinia())
-app.use(router)
-
-app.mount('#app')
-```
-
----
-
-## 8. App.vue Root Component
-
-Create `/src/App.vue`:
-
-```vue
-<script setup>
-import { useUserStore } from '@/stores/userStore'
-import { useRouter } from 'vue-router'
-
-const userStore = useUserStore()
-const router = useRouter()
-
-function logout() {
-  userStore.logout()
-  router.push('/login')
-}
-</script>
-
-<template>
-  <div id="app">
-    <header v-if="userStore.loggedIn">
-      <span>{{ userStore.email }}</span>
-      <button @click="logout">Logout</button>
-    </header>
-    <router-view />
-  </div>
-</template>
-
-<style>
-#app {
-  font-family: system-ui, -apple-system, sans-serif;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 20px;
-}
-</style>
-```
-
----
-
-## 9. Vegvisr API Endpoints Reference
-
-### Authentication
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `https://test.vegvisr.org/check-email?email={email}` | GET | Check if email exists |
-| `https://email-worker.torarnehave.workers.dev/login/magic/send` | POST | Send magic link |
-| `https://email-worker.torarnehave.workers.dev/login/magic/verify?token={token}` | GET | Verify magic token |
-| `https://dashboard.vegvisr.org/get-role?email={email}` | GET | Get user role |
-| `https://dashboard.vegvisr.org/userdata?email={email}` | GET | Get user data |
-| `https://dashboard.vegvisr.org/auth/validate-token` | GET | Validate auth token (use `Authorization: Bearer {token}` header) |
-
-### Knowledge Graph
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory` | POST | Save new graph |
-| `https://knowledge-graph-worker.torarnehave.workers.dev/getknowgraph?id={id}` | GET | Get graph by ID |
-| `https://knowledge-graph-worker.torarnehave.workers.dev/getknowgraphs` | GET | List all graphs |
-
----
-
-## 10. Hello World Example
-
-Here's a complete "Hello World" app that:
-1. Authenticates with magic link
-2. Saves a document to the Knowledge Graph
-
-### Main View (`/src/views/MainView.vue`):
-
-```vue
-<script setup>
-import { ref } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-
-const userStore = useUserStore()
-const message = ref('Hello World!')
-const saving = ref(false)
-const result = ref(null)
-
-async function saveHelloWorld() {
-  saving.value = true
-  result.value = null
-
-  try {
-    const response = await fetch('/api/save-hello', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userStore.emailVerificationToken}`
-      },
-      body: JSON.stringify({
-        title: 'Hello World Document',
-        content: `# Hello World!\n\nThis document was created by ${userStore.email} on ${new Date().toISOString()}\n\nMessage: ${message.value}`
+    if (!kgResponse.ok) {
+      return new Response(JSON.stringify({
+        error: 'Failed to save to Knowledge Graph',
+        details: kgResult
+      }), {
+        status: 500,
+        headers: corsHeaders
       })
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      graphId: graphId,
+      nodeId: nodeId
+    }), {
+      status: 200,
+      headers: corsHeaders
     })
 
-    result.value = await response.json()
   } catch (error) {
-    result.value = { error: error.message }
-  } finally {
-    saving.value = false
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: error.message
+    }), {
+      status: 500,
+      headers: corsHeaders
+    })
   }
 }
-</script>
 
-<template>
-  <div class="main-view">
-    <h1>Hello World App</h1>
-    <p>Welcome, {{ userStore.email }}!</p>
-
-    <div class="form">
-      <label>Your Message:</label>
-      <input v-model="message" type="text" />
-
-      <button @click="saveHelloWorld" :disabled="saving">
-        {{ saving ? 'Saving...' : 'Save to Knowledge Graph' }}
-      </button>
-    </div>
-
-    <div v-if="result" class="result">
-      <h3>Result:</h3>
-      <pre>{{ JSON.stringify(result, null, 2) }}</pre>
-    </div>
-  </div>
-</template>
-
-<style scoped>
-.main-view {
-  max-width: 600px;
-  margin: 0 auto;
+function getCookie(request, name) {
+  const cookies = request.headers.get('Cookie') || ''
+  const match = cookies.match(new RegExp(`${name}=([^;]+)`))
+  return match ? match[1] : null
 }
-
-.form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 20px 0;
-}
-
-input {
-  padding: 10px;
-  font-size: 16px;
-}
-
-button {
-  padding: 12px 24px;
-  background: #4f6d7a;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-
-button:disabled {
-  opacity: 0.5;
-}
-
-.result {
-  background: #f5f5f5;
-  padding: 15px;
-  border-radius: 4px;
-}
-
-pre {
-  overflow-x: auto;
-}
-</style>
 ```
 
 ---
 
-## 11. README Template (REQUIRED)
-
-**Every new app MUST include a README.md file.** Create `/README.md`:
-
-```markdown
-# [App Name]
-
-A [brief description] app integrated with the Vegvisr ecosystem.
-
-## Features
-
-- Magic link authentication via Vegvisr
-- [Feature 2]
-- [Feature 3]
-- Knowledge Graph integration
-
-## Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- Cloudflare account (for deployment)
-- Vegvisr account (for authentication)
-
-## Installation
+## 7. Deployment Steps
 
 ```bash
-# Clone the repository
-git clone [repo-url]
-cd [app-name]
+# 1. Deploy auth-worker FIRST
+cd my-app-auth-worker
+npx wrangler deploy
 
-# Install dependencies
-npm install
-```
-
-## Development
-
-```bash
-# Run frontend dev server (port 3000)
-npm run dev
-
-# Run with Cloudflare Workers locally (port 8788)
-npx wrangler pages dev dist --port 8788
-```
-
-## Deployment
-
-```bash
-# Build and deploy to Cloudflare Pages
+# 2. Build frontend
+cd ..
 npm run build
-npx wrangler pages deploy dist --project-name=[app-name]
-```
 
-## Environment
-
-This app uses the following Vegvisr services:
-- **Authentication**: `dashboard.vegvisr.org`, `email-worker.torarnehave.workers.dev`
-- **Knowledge Graph**: `knowledge-graph-worker.torarnehave.workers.dev`
-
-## Project Structure
-
-```
-src/
-  main.js           # App initialization
-  App.vue           # Root component
-  router/           # Vue Router configuration
-  stores/           # Pinia stores (userStore)
-  views/            # Page components
-functions/
-  api/              # Cloudflare Worker API endpoints
-```
-
-## License
-
-[License type]
+# 3. Deploy Pages with service bindings
+npx wrangler pages deploy dist --project-name=my-app
 ```
 
 ---
@@ -1044,33 +789,13 @@ functions/
 
 When creating a new Vegvisr-integrated app, ensure you have:
 
+- [ ] **Auth Worker** (`my-app-auth-worker/`) - Proxies all auth requests
+- [ ] **Deploy auth-worker first** before the main app
+- [ ] **Frontend calls ONLY auth-worker** - Never call backend services directly
+- [ ] **User store** uses `AUTH_API` pointing to auth-worker
+- [ ] **Login view** uses auth-worker for all auth operations
+- [ ] **wrangler.toml** with service bindings for both AUTH_WORKER and KNOWLEDGE_GRAPH_WORKER
+- [ ] **API functions** use service bindings for auth validation
 - [ ] **README.md** with setup and usage documentation
-- [ ] User store with `setUser`, `logout`, `loadFromStorage`, `fetchUserContext`
 - [ ] Auth cookie management (`vegvisr_token`)
-- [ ] Login view with magic link support
 - [ ] Router with auth guards
-- [ ] API worker with token validation (use `/auth/validate-token` with Bearer header)
-- [ ] Knowledge Graph integration (if saving documents)
-- [ ] Proper CORS headers
-- [ ] Wrangler.toml with service bindings
-
----
-
-## Development Commands
-
-```bash
-# Install dependencies
-npm install
-
-# Run frontend dev server (port 3000)
-npm run dev
-
-# Run Cloudflare Worker locally (port 8788)
-npx wrangler pages dev . --port 8788
-
-# Build for production
-npm run build
-
-# Deploy to Cloudflare Pages
-npm run deploy
-```

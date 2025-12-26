@@ -7,9 +7,8 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-// API Endpoints
-const CHECK_EMAIL_API = 'https://test.vegvisr.org'
-const EMAIL_WORKER = 'https://email-worker.torarnehave.workers.dev'
+// API Endpoint - All auth requests go through the app's auth-worker
+const AUTH_API = 'https://helloworld-auth-worker.torarnehave.workers.dev'
 
 // State
 const email = ref('')
@@ -46,7 +45,7 @@ async function checkEmail() {
 
   try {
     const response = await fetch(
-      `${CHECK_EMAIL_API}/check-email?email=${encodeURIComponent(email.value)}`
+      `${AUTH_API}/check-email?email=${encodeURIComponent(email.value)}`
     )
     const data = await response.json()
 
@@ -68,16 +67,12 @@ async function sendMagicLink() {
   loading.value = true
   error.value = ''
 
-  // Use current URL as redirect
-  const redirectUrl = window.location.origin + '/login'
-
   try {
-    const response = await fetch(`${EMAIL_WORKER}/login/magic/send`, {
+    const response = await fetch(`${AUTH_API}/magic/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: email.value,
-        redirectUrl: redirectUrl
+        email: email.value
       })
     })
 
@@ -104,7 +99,7 @@ async function verifyMagicToken(token) {
 
   try {
     const response = await fetch(
-      `${EMAIL_WORKER}/login/magic/verify?token=${encodeURIComponent(token)}`
+      `${AUTH_API}/magic/verify?token=${encodeURIComponent(token)}`
     )
     const data = await response.json()
 
