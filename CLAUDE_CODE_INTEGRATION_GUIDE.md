@@ -863,15 +863,94 @@ pre {
 
 ---
 
+## 11. README Template (REQUIRED)
+
+**Every new app MUST include a README.md file.** Create `/README.md`:
+
+```markdown
+# [App Name]
+
+A [brief description] app integrated with the Vegvisr ecosystem.
+
+## Features
+
+- Magic link authentication via Vegvisr
+- [Feature 2]
+- [Feature 3]
+- Knowledge Graph integration
+
+## Prerequisites
+
+- Node.js 18+
+- npm or yarn
+- Cloudflare account (for deployment)
+- Vegvisr account (for authentication)
+
+## Installation
+
+```bash
+# Clone the repository
+git clone [repo-url]
+cd [app-name]
+
+# Install dependencies
+npm install
+```
+
+## Development
+
+```bash
+# Run frontend dev server (port 3000)
+npm run dev
+
+# Run with Cloudflare Workers locally (port 8788)
+npx wrangler pages dev dist --port 8788
+```
+
+## Deployment
+
+```bash
+# Build and deploy to Cloudflare Pages
+npm run build
+npx wrangler pages deploy dist --project-name=[app-name]
+```
+
+## Environment
+
+This app uses the following Vegvisr services:
+- **Authentication**: `dashboard.vegvisr.org`, `email-worker.torarnehave.workers.dev`
+- **Knowledge Graph**: `knowledge-graph-worker.torarnehave.workers.dev`
+
+## Project Structure
+
+```
+src/
+  main.js           # App initialization
+  App.vue           # Root component
+  router/           # Vue Router configuration
+  stores/           # Pinia stores (userStore)
+  views/            # Page components
+functions/
+  api/              # Cloudflare Worker API endpoints
+```
+
+## License
+
+[License type]
+```
+
+---
+
 ## Summary Checklist
 
 When creating a new Vegvisr-integrated app, ensure you have:
 
+- [ ] **README.md** with setup and usage documentation
 - [ ] User store with `setUser`, `logout`, `loadFromStorage`, `fetchUserContext`
 - [ ] Auth cookie management (`vegvisr_token`)
 - [ ] Login view with magic link support
 - [ ] Router with auth guards
-- [ ] API worker with token validation
+- [ ] API worker with token validation (use `/auth/validate-token` with Bearer header)
 - [ ] Knowledge Graph integration (if saving documents)
 - [ ] Proper CORS headers
 - [ ] Wrangler.toml with service bindings
