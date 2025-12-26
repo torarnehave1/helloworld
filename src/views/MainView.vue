@@ -6,7 +6,7 @@ const userStore = useUserStore()
 
 // State
 const title = ref('My Document')
-const content = ref(`# Hello World
+const content = ref(`# Hello Vegvisr
 
 Write your markdown content here.
 
@@ -73,7 +73,7 @@ async function saveToKnowledgeGraph() {
 <template>
   <div class="main-view">
     <div class="welcome-card">
-      <h1>Welcome to Hello World!</h1>
+      <h1>Welcome to Hello Vegvisr!</h1>
       <p class="welcome-text">
         You're logged in as <strong>{{ userStore.email }}</strong>
         <span v-if="userStore.role" class="role-badge">{{ userStore.role }}</span>
@@ -133,7 +133,7 @@ async function saveToKnowledgeGraph() {
     <div class="info-card">
       <h3>About This App</h3>
       <p>
-        This is a Hello World demonstration app integrated with the Vegvisr ecosystem.
+        This is a Hello Vegvisr demonstration app integrated with the Vegvisr ecosystem.
         It showcases:
       </p>
       <ul>

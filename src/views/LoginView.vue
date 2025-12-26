@@ -143,7 +143,7 @@ function handleSubmit() {
   <div class="login-container">
     <div class="login-card">
       <div class="login-header">
-        <h1>Hello World</h1>
+        <h1>Hello Vegvisr</h1>
         <p class="subtitle">Sign in to continue</p>
       </div>
 

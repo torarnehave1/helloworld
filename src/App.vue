@@ -15,7 +15,7 @@ function logout() {
   <div id="app">
     <header v-if="userStore.loggedIn">
       <div class="header-content">
-        <span class="logo">Hello World</span>
+        <span class="logo">Hello Vegvisr</span>
         <div class="user-section">
           <span class="user-email">{{ userStore.email }}</span>
           <button @click="logout" class="logout-btn">Logout</button>

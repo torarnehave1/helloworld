@@ -50,7 +50,7 @@ export async function onRequestPost(context) {
 
     const graphData = {
       metadata: {
-        title: title || 'Hello World Document',
+        title: title || 'Hello Vegvisr Document',
         description: `Markdown document created by ${email || 'unknown'} at ${now}`,
         createdBy: 'helloworld-app',
         version: 0
@@ -59,7 +59,7 @@ export async function onRequestPost(context) {
         {
           id: nodeId,
           color: '#4f6d7a',
-          label: title || 'Hello World',
+          label: title || 'Hello Vegvisr',
           type: 'fulltext',
           info: `${content}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
           bibl: ['https://hello.vegvisr.org'],

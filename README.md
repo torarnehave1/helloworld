@@ -1,4 +1,4 @@
-# Hello World - Vegvisr
+# Hello Vegvisr
 
 A Vue 3 application integrated with the Vegvisr ecosystem, demonstrating magic link authentication and Knowledge Graph integration.
 
