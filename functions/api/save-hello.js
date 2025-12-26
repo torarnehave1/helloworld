@@ -103,19 +103,26 @@ export async function onRequest(context) {
       }
     )
 
+    const kgResponseText = await kgResponse.text()
+
     if (!kgResponse.ok) {
-      const errorText = await kgResponse.text()
-      console.error('Knowledge Graph error:', errorText)
+      console.error('Knowledge Graph error:', kgResponseText)
       return new Response(JSON.stringify({
         error: 'Failed to save to Knowledge Graph',
-        details: errorText
+        details: kgResponseText
       }), {
         status: 500,
         headers: corsHeaders
       })
     }
 
-    const kgResult = await kgResponse.json()
+    // Try to parse response as JSON, fallback to text
+    let kgResult
+    try {
+      kgResult = JSON.parse(kgResponseText)
+    } catch {
+      kgResult = { raw: kgResponseText }
+    }
 
     return new Response(JSON.stringify({
       success: true,
