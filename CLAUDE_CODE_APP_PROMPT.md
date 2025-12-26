@@ -35,7 +35,9 @@ The app MUST use the existing Vegvisr authentication system:
   - Use sessionStorage flag: `email_session_verified` = '1'
 
 - **Token Validation** (in API workers):
-  - Validate: `GET https://dashboard.vegvisr.org/validate-token?token={token}`
+  - Validate: `GET https://dashboard.vegvisr.org/auth/validate-token`
+  - **IMPORTANT**: Send token in header: `Authorization: Bearer {token}`
+  - Do NOT use query parameter for token
 
 ### 2. Knowledge Graph Integration (for saving documents)
 To save content to the Knowledge Graph:
@@ -92,6 +94,7 @@ functions/
 package.json
 vite.config.js
 wrangler.toml
+README.md           # Project documentation (REQUIRED)
 ```
 
 ### 5. User Store Must Include
@@ -106,7 +109,17 @@ router.beforeEach((to, from, next) => {
 })
 ```
 
-Please create all necessary files for a working app.
+### 7. README.md (REQUIRED)
+Every app MUST include a README.md with:
+- Project description and features
+- Prerequisites (Node.js, Cloudflare account, Vegvisr account)
+- Installation instructions (`npm install`)
+- Development commands (`npm run dev`, `wrangler pages dev`)
+- Deployment instructions (`npm run build && wrangler pages deploy dist`)
+- Project structure overview
+- List of Vegvisr services used
+
+Please create all necessary files for a working app, including README.md.
 ```
 
 ---
@@ -157,7 +170,7 @@ A note-taking app that:
 | Verify magic token | `GET https://email-worker.torarnehave.workers.dev/login/magic/verify?token={token}` |
 | Get user role | `GET https://dashboard.vegvisr.org/get-role?email={email}` |
 | Get user data | `GET https://dashboard.vegvisr.org/userdata?email={email}` |
-| Validate token | `GET https://dashboard.vegvisr.org/validate-token?token={token}` |
+| Validate token | `GET https://dashboard.vegvisr.org/auth/validate-token` (use `Authorization: Bearer {token}` header) |
 | Save to graph | `POST https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory` |
 
 | Cookie/Storage | Purpose |
