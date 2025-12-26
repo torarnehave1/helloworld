@@ -15,7 +15,11 @@ function logout() {
   <div id="app">
     <header v-if="userStore.loggedIn">
       <div class="header-content">
-        <span class="logo">Hello Vegvisr</span>
+        <router-link to="/" class="logo">Hello Vegvisr</router-link>
+        <nav class="nav-links">
+          <router-link to="/" class="nav-link">Create</router-link>
+          <router-link to="/about" class="nav-link">About</router-link>
+        </nav>
         <div class="user-section">
           <span class="user-email">{{ userStore.email }}</span>
           <button @click="logout" class="logout-btn">Logout</button>
@@ -52,6 +56,36 @@ header {
 .logo {
   font-size: 1.25rem;
   font-weight: 600;
+  color: white;
+  text-decoration: none;
+}
+
+.logo:hover {
+  opacity: 0.9;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-link {
+  padding: 8px 16px;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  transition: background 0.2s, color 0.2s;
+}
+
+.nav-link:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.nav-link.router-link-exact-active {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .user-section {

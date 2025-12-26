@@ -3,6 +3,7 @@ import { useUserStore } from '@/stores/userStore'
 
 const LoginView = () => import('@/views/LoginView.vue')
 const MainView = () => import('@/views/MainView.vue')
+const AboutView = () => import('@/views/AboutView.vue')
 
 const routes = [
   {
@@ -15,6 +16,12 @@ const routes = [
     path: '/',
     name: 'main',
     component: MainView,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/about',
+    name: 'about',
+    component: AboutView,
     meta: { requiresAuth: true }
   }
 ]
