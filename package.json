@@ -16,6 +16,6 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
     "vite": "^5.1.6",
-    "wrangler": "^3.34.2"
+    "wrangler": "^4.54.0"
   }
 }
