@@ -2,5 +2,10 @@ name = "helloworld-vegvisr"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
 
+# Service binding to Knowledge Graph Worker
+[[services]]
+binding = "KNOWLEDGE_GRAPH_WORKER"
+service = "knowledge-graph-worker"
+
 [vars]
 ENVIRONMENT = "production"

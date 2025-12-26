@@ -40,10 +40,33 @@ The app MUST use the existing Vegvisr authentication system:
   - Do NOT use query parameter for token
 
 ### 2. Knowledge Graph Integration (for saving documents)
-To save content to the Knowledge Graph:
 
-- **Endpoint**: `POST https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory`
-- **Payload**:
+**IMPORTANT: Use SERVICE BINDINGS, not direct HTTP fetch!**
+
+Add to `wrangler.toml`:
+```toml
+[[services]]
+binding = "KNOWLEDGE_GRAPH_WORKER"
+service = "knowledge-graph-worker"
+```
+
+In your API worker, use the service binding:
+```javascript
+// CORRECT: Use service binding
+const response = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
+  'https://knowledge-graph-worker/saveGraphWithHistory',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, graphData, override: false })
+  }
+)
+
+// WRONG: Do NOT use direct HTTP fetch
+// const response = await fetch('https://knowledge-graph-worker.torarnehave.workers.dev/...')
+```
+
+**Payload structure**:
 ```json
 {
   "id": "graph_{timestamp}",

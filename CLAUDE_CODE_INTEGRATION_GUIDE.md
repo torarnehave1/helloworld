@@ -529,7 +529,7 @@ export async function onRequest(context) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-API-Token',
     'Content-Type': 'application/json'
   }
 
@@ -540,9 +540,7 @@ export async function onRequest(context) {
 
   try {
     // Verify authentication
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '') ||
-                  getCookie(request, 'vegvisr_token')
+    const token = getAuthToken(request)
 
     if (!token) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -558,7 +556,8 @@ export async function onRequest(context) {
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
         }
       }
     )
@@ -574,7 +573,7 @@ export async function onRequest(context) {
     // Your API logic here
     const body = await request.json()
 
-    // Example: Save to Knowledge Graph
+    // Example: Save to Knowledge Graph using SERVICE BINDING
     const graphResult = await saveToKnowledgeGraph(
       env,
       body.content,
@@ -582,9 +581,19 @@ export async function onRequest(context) {
       'https://your-app.vegvisr.org'
     )
 
+    if (!graphResult.saved) {
+      return new Response(JSON.stringify({
+        error: graphResult.error || 'Failed to save'
+      }), {
+        status: 500,
+        headers: corsHeaders
+      })
+    }
+
     return new Response(JSON.stringify({
       success: true,
-      graphId: graphResult.id
+      graphId: graphResult.id,
+      response: graphResult.response
     }), { headers: corsHeaders })
 
   } catch (error) {
@@ -595,10 +604,100 @@ export async function onRequest(context) {
   }
 }
 
-function getCookie(request, name) {
-  const cookies = request.headers.get('Cookie') || ''
-  const match = cookies.match(new RegExp(`${name}=([^;]+)`))
-  return match ? match[1] : null
+/**
+ * Get auth token from request (supports multiple methods)
+ */
+function getAuthToken(request) {
+  // Method 1: X-API-Token header (preferred for frontend)
+  const headerToken = request.headers.get('X-API-Token')
+  if (headerToken) return headerToken
+
+  // Method 2: Authorization Bearer header
+  const authHeader = request.headers.get('Authorization') || ''
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7)
+  }
+
+  // Method 3: Cookie fallback (for cross-app SSO)
+  const cookieHeader = request.headers.get('Cookie') || ''
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map((entry) => {
+      const [key, ...rest] = entry.trim().split('=')
+      return [key, rest.join('=')]
+    })
+  )
+  return cookies.vegvisr_token || null
+}
+
+/**
+ * Save to Knowledge Graph using SERVICE BINDING (preferred method)
+ * Requires wrangler.toml: [[services]] binding = "KNOWLEDGE_GRAPH_WORKER"
+ */
+async function saveToKnowledgeGraph(env, content, title, sourceUrl) {
+  // Check if service binding is configured
+  if (!env?.KNOWLEDGE_GRAPH_WORKER?.fetch) {
+    return { saved: false, error: 'Knowledge graph service binding not configured in wrangler.toml' }
+  }
+
+  const graphId = `graph_${Date.now()}`
+  const nodeId = crypto.randomUUID()
+
+  const graphData = {
+    metadata: {
+      title: title,
+      description: `Document: ${title}`,
+      createdBy: 'your-app-name',
+      version: 0
+    },
+    nodes: [
+      {
+        id: nodeId,
+        color: '#4f6d7a',
+        label: title,
+        type: 'fulltext',
+        info: content,           // Your document content (Markdown)
+        bibl: sourceUrl ? [sourceUrl] : [],
+        imageWidth: null,
+        imageHeight: null,
+        visible: true,
+        position: { x: 0, y: 0 },
+        path: null
+      }
+    ],
+    edges: []
+  }
+
+  try {
+    // Use service binding - internal Cloudflare routing (faster, more reliable)
+    const response = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
+      'https://knowledge-graph-worker/saveGraphWithHistory',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: graphId,
+          graphData: graphData,
+          override: false
+        })
+      }
+    )
+
+    const text = await response.text()
+    let parsed = null
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      parsed = { message: text }
+    }
+
+    if (!response.ok) {
+      return { saved: false, id: graphId, error: parsed?.error || text }
+    }
+
+    return { saved: true, id: graphId, nodeId: nodeId, response: parsed }
+  } catch (error) {
+    return { saved: false, id: graphId, error: error.message || 'Save failed' }
+  }
 }
 ```
 

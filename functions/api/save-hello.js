@@ -95,9 +95,18 @@ export async function onRequest(context) {
       edges: []
     }
 
-    // Save to Knowledge Graph
-    const kgResponse = await fetch(
-      'https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory',
+    // Save to Knowledge Graph using SERVICE BINDING
+    if (!env?.KNOWLEDGE_GRAPH_WORKER?.fetch) {
+      return new Response(JSON.stringify({
+        error: 'Knowledge Graph service binding not configured'
+      }), {
+        status: 500,
+        headers: corsHeaders
+      })
+    }
+
+    const kgResponse = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
+      'https://knowledge-graph-worker/saveGraphWithHistory',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
