@@ -62,7 +62,7 @@ export async function onRequestPost(context) {
           label: title || 'Hello World',
           type: 'fulltext',
           info: `${content}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
-          bibl: ['https://helloworld.vegvisr.org'],
+          bibl: ['https://hello.vegvisr.org'],
           imageWidth: null,
           imageHeight: null,
           visible: true,
@@ -141,7 +141,7 @@ export async function onRequestPost(context) {
 
 function buildCorsHeaders(request) {
   const origin = request.headers.get('Origin');
-  const allowedOrigin = origin === 'https://helloworld.vegvisr.org' ? origin : '*';
+  const allowedOrigin = origin === 'https://hello.vegvisr.org' ? origin : '*';
   const headers = {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -178,7 +178,7 @@ function unauthorizedResponse(request, corsHeaders, reason, status = 401) {
     <div class="card">
       <h1>Login required</h1>
       <p>Please log in to HelloWorld to continue.</p>
-      <a class="button" href="https://helloworld.vegvisr.org/login">Go to Login</a>
+      <a class="button" href="https://hello.vegvisr.org/login">Go to Login</a>
       <div class="note">${reason || 'Access restricted'}</div>
     </div>
   </body>
@@ -198,12 +198,12 @@ function unauthorizedResponse(request, corsHeaders, reason, status = 401) {
 
 function isAllowedOrigin(request) {
   const origin = request.headers.get('Origin');
-  if (origin && origin !== 'https://helloworld.vegvisr.org') {
+  if (origin && origin !== 'https://hello.vegvisr.org') {
     return false;
   }
 
   const referer = request.headers.get('Referer');
-  if (referer && !referer.startsWith('https://helloworld.vegvisr.org/')) {
+  if (referer && !referer.startsWith('https://hello.vegvisr.org/')) {
     return false;
   }
 

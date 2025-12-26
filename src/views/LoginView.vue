@@ -74,7 +74,7 @@ async function sendMagicLink() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email.value,
-        redirectUrl: 'https://helloworld.vegvisr.org/login'
+        redirectUrl: 'https://hello.vegvisr.org/login'
       })
     })
 

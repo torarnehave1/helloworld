@@ -1,6 +1,6 @@
 /**
  * HelloWorld Auth Worker
- * Handles authentication for helloworld.vegvisr.org using service bindings to existing workers
+ * Handles authentication for hello.vegvisr.org using service bindings to existing workers
  */
 
 const corsHeaders = {
@@ -68,7 +68,7 @@ export default {
           body: JSON.stringify({
             ...body,
             // Override redirect URL to come back to HelloWorld
-            redirectUrl: 'https://helloworld.vegvisr.org/login',
+            redirectUrl: 'https://hello.vegvisr.org/login',
           }),
         })
         const data = await res.json()
