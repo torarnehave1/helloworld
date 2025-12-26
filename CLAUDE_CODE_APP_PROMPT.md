@@ -52,14 +52,46 @@ NO auth-worker binding in main wrangler.toml!
 - Check `typeof document === 'undefined'` before DOM access
 - Check `window.location.hostname.endsWith('vegvisr.org')` for domain
 
-### 6. Tech Stack:
+### 6. CRITICAL - Token Handling in LoginView:
+After magic link verification, use `userContext` directly from `fetchUserContext()`:
+```javascript
+// CORRECT - userContext contains emailVerificationToken from /userdata
+const userContext = await userStore.fetchUserContext(data.email)
+userStore.setUser(userContext)
+
+// WRONG - DO NOT override with magic link token
+userStore.setUser({ ...userContext, emailVerificationToken: data.token })
+```
+The `emailVerificationToken` comes from `/userdata` endpoint, NOT from magic link response!
+
+### 7. Frontend fetch to /api/* must NOT send Authorization header:
+```javascript
+// CORRECT - relies on cookie
+fetch('/api/save-data', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ ... })
+})
+
+// WRONG - don't add Authorization header
+headers: { 'Authorization': `Bearer ${token}` }
+```
+
+### 8. Pages Functions only allow Admin/Superadmin roles:
+```javascript
+if (data?.valid && (role === 'Superadmin' || role === 'Admin')) {
+  return { ok: true, status: 200 }
+}
+```
+
+### 9. Tech Stack:
 - Vue 3 with Composition API (`<script setup>`)
 - Pinia for state management
 - Vue Router 4 with auth guards
 - Vite for build
 - Cloudflare Pages Functions for API
 
-### 7. Required Files:
+### 10. Required Files:
 ```
 myapp/
 ├── src/
@@ -81,7 +113,7 @@ myapp/
 └── README.md
 ```
 
-### 8. Deployment:
+### 11. Deployment:
 1. Deploy auth-worker FIRST: `cd myapp-auth-worker && npx wrangler deploy`
 2. Push to GitHub (Pages auto-deploys)
 

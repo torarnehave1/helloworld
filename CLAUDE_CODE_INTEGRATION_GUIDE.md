@@ -377,7 +377,8 @@ async function sendMagicLink() {
   }
 }
 
-// Verify magic token via EMAIL WORKER DIRECTLY
+// CRITICAL: After magic link verification, use userContext from fetchUserContext
+// The emailVerificationToken comes from /userdata endpoint, NOT from magic link response
 async function verifyMagicToken(token) {
   loading.value = true
   step.value = 'verifying'
@@ -387,14 +388,11 @@ async function verifyMagicToken(token) {
     const data = await response.json()
 
     if (data.success && data.email) {
+      // fetchUserContext gets emailVerificationToken from /userdata endpoint
       const userContext = await userStore.fetchUserContext(data.email)
 
-      if (userContext) {
-        userStore.setUser({ ...userContext, emailVerificationToken: data.token || token })
-      } else {
-        userStore.setUser({ email: data.email, emailVerificationToken: data.token || token })
-      }
-
+      // IMPORTANT: Use userContext directly - it contains the correct token
+      userStore.setUser(userContext)
       sessionStorage.setItem('myapp_session_verified', '1')
       router.push('/')
     } else {
@@ -654,8 +652,11 @@ git push
 - [ ] wrangler.toml has ONLY `KNOWLEDGE_GRAPH_WORKER` binding (no AUTH_WORKER)
 - [ ] LoginView calls `AUTH_API` for `/check-email`
 - [ ] LoginView calls `EMAIL_WORKER` DIRECTLY for `/login/magic/send` and `/login/magic/verify`
+- [ ] **CRITICAL: After magic verify, use `userStore.setUser(userContext)` directly - the `emailVerificationToken` comes from `/userdata`, NOT from magic link response**
 - [ ] userStore uses `encodeURIComponent` for cookie token
 - [ ] userStore checks `typeof document === 'undefined'` for SSR safety
 - [ ] Pages Functions call `dashboard.vegvisr.org/auth/validate-token` DIRECTLY (not through auth-worker)
+- [ ] Pages Functions only allow `Admin` or `Superadmin` roles
+- [ ] Frontend fetch to `/api/*` does NOT send Authorization header (relies on cookie)
 - [ ] localStorage key: `{appname}_user`
 - [ ] sessionStorage key: `{appname}_session_verified`
