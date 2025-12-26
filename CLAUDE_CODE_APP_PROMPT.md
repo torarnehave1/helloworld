@@ -133,6 +133,7 @@ Please create all necessary files following the exact patterns from CLAUDE_CODE_
 | Verify magic token | `email-worker.torarnehave.workers.dev/login/magic/verify` | Frontend DIRECTLY |
 | Validate token | `dashboard.vegvisr.org/auth/validate-token` | Pages Functions DIRECTLY |
 | Save to graph | Service binding `KNOWLEDGE_GRAPH_WORKER` | Pages Functions |
+| Upload image | `api.vegvisr.org/upload` | Frontend DIRECTLY |
 
 | Storage | Key | Purpose |
 |---------|-----|---------|

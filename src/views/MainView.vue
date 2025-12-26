@@ -4,6 +4,9 @@ import { useUserStore } from '@/stores/userStore'
 
 const userStore = useUserStore()
 
+// API endpoint for image uploads (shared Vegvisr R2 bucket)
+const UPLOAD_API = 'https://api.vegvisr.org/upload'
+
 // State
 const title = ref('My Document')
 const content = ref(`# Hello Vegvisr
@@ -14,6 +17,7 @@ Write your markdown content here.
 - **Bold** and *italic* text
 - Lists and bullet points
 - Code blocks
+- Images (click the image button below)
 
 \`\`\`javascript
 console.log('Hello from the Knowledge Graph!')
@@ -26,6 +30,68 @@ Add your own content above!
 const saving = ref(false)
 const result = ref(null)
 const error = ref('')
+const uploading = ref(false)
+const textareaRef = ref(null)
+
+// Image upload handler - uses api.vegvisr.org/upload (shared R2 bucket)
+async function handleImageUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    error.value = 'Please select a valid image file'
+    return
+  }
+
+  uploading.value = true
+  error.value = ''
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await fetch(UPLOAD_API, {
+      method: 'POST',
+      body: formData
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to upload image')
+    }
+
+    const data = await response.json()
+    const imageUrl = data.url
+
+    // Insert markdown image at cursor position
+    const textarea = textareaRef.value
+    const altText = file.name.replace(/\.[^/.]+$/, '')
+    const markdownImage = `![${altText}](${imageUrl})`
+
+    if (textarea) {
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      const before = content.value.substring(0, start)
+      const after = content.value.substring(end)
+      content.value = before + markdownImage + '\n' + after
+
+      // Move cursor after inserted image
+      setTimeout(() => {
+        textarea.selectionStart = textarea.selectionEnd = start + markdownImage.length + 1
+        textarea.focus()
+      }, 0)
+    } else {
+      // Fallback: append to end
+      content.value += '\n' + markdownImage + '\n'
+    }
+  } catch (e) {
+    error.value = 'Failed to upload image. Please try again.'
+    console.error('Upload error:', e)
+  } finally {
+    uploading.value = false
+    // Reset file input
+    event.target.value = ''
+  }
+}
 
 async function saveToKnowledgeGraph() {
   if (!title.value.trim()) {
@@ -99,14 +165,33 @@ async function saveToKnowledgeGraph() {
 
       <div class="form-group">
         <label for="content">Content (Markdown)</label>
+        <div class="textarea-toolbar">
+          <input
+            type="file"
+            ref="fileInputRef"
+            accept="image/*"
+            @change="handleImageUpload"
+            style="display: none"
+          />
+          <button
+            type="button"
+            class="toolbar-btn"
+            @click="$refs.fileInputRef.click()"
+            :disabled="uploading || saving"
+            title="Upload image"
+          >
+            {{ uploading ? 'Uploading...' : 'Add Image' }}
+          </button>
+        </div>
         <textarea
           id="content"
+          ref="textareaRef"
           v-model="content"
           placeholder="Write your markdown content here..."
-          :disabled="saving"
+          :disabled="saving || uploading"
           rows="15"
         ></textarea>
-        <p class="hint">Supports Markdown: **bold**, *italic*, # headings, - lists, ```code blocks```</p>
+        <p class="hint">Supports Markdown: **bold**, *italic*, # headings, - lists, ```code blocks```, ![alt](url) for images</p>
       </div>
 
       <button @click="saveToKnowledgeGraph" :disabled="saving" class="save-btn">
@@ -140,6 +225,7 @@ async function saveToKnowledgeGraph() {
         <li>Magic link authentication</li>
         <li>User session management</li>
         <li>Knowledge Graph integration</li>
+        <li>Image upload to R2 (via api.vegvisr.org)</li>
         <li>Cloudflare Workers API</li>
       </ul>
     </div>
@@ -250,6 +336,31 @@ async function saveToKnowledgeGraph() {
 .form-group textarea:focus {
   outline: none;
   border-color: #4f6d7a;
+}
+
+.textarea-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.toolbar-btn {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .hint {

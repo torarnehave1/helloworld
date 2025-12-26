@@ -646,6 +646,62 @@ git push
 
 ---
 
+## Image Upload to R2
+
+All Vegvisr apps can upload images to the shared R2 bucket via `api.vegvisr.org/upload`. Images are served through imgix for optimization.
+
+### Upload Endpoint
+
+```
+POST https://api.vegvisr.org/upload
+Content-Type: multipart/form-data
+Body: FormData with 'file' field
+```
+
+### Response
+
+```json
+{
+  "url": "https://vegvisr.imgix.net/1234567890.jpg"
+}
+```
+
+### Frontend Implementation
+
+```javascript
+// API endpoint for image uploads (shared Vegvisr R2 bucket)
+const UPLOAD_API = 'https://api.vegvisr.org/upload'
+
+async function handleImageUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file || !file.type.startsWith('image/')) return
+
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(UPLOAD_API, {
+    method: 'POST',
+    body: formData
+  })
+
+  const data = await response.json()
+  const imageUrl = data.url  // https://vegvisr.imgix.net/filename.jpg
+
+  // Insert markdown image syntax
+  const markdownImage = `![${file.name}](${imageUrl})`
+}
+```
+
+### Key Points
+
+- No service binding needed - uses shared `api.vegvisr.org/upload` endpoint
+- Auth cookie is shared across `.vegvisr.org` subdomains
+- Images stored in `blog-pictures` R2 bucket
+- Served via imgix CDN: `https://vegvisr.imgix.net/{filename}`
+- Supports PNG, JPG, GIF, WebP, SVG
+
+---
+
 ## Summary Checklist
 
 - [ ] Auth Worker deployed (`myapp-auth-worker`)
