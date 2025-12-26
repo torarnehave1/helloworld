@@ -4,103 +4,108 @@ const AUTH_API = 'https://helloworld-auth-worker.torarnehave.workers.dev'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
-    email: '',
-    role: '',
-    user_id: '',
-    emailVerificationToken: '',
-    loggedIn: false
+    email: null,
+    role: null,
+    user_id: null,
+    emailVerificationToken: null,
+    phone: null,
+    phoneVerifiedAt: null,
+    loggedIn: false,
   }),
 
   actions: {
     setAuthCookie(token) {
-      const expires = new Date()
-      expires.setTime(expires.getTime() + 30 * 24 * 60 * 60 * 1000) // 30 days
-
-      // Set cookie for vegvisr.org domain (cross-app auth)
-      document.cookie = `vegvisr_token=${token}; expires=${expires.toUTCString()}; path=/; domain=.vegvisr.org; SameSite=Lax; Secure`
-
-      // Also set for current domain (development)
-      document.cookie = `vegvisr_token=${token}; expires=${expires.toUTCString()}; path=/; SameSite=Lax; Secure`
+      if (typeof document === 'undefined' || !token) return
+      const isVegvisr = window.location.hostname.endsWith('vegvisr.org')
+      const domain = isVegvisr ? '; Domain=.vegvisr.org' : ''
+      const maxAge = 60 * 60 * 24 * 30 // 30 days
+      document.cookie = `vegvisr_token=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure${domain}`
     },
 
     clearAuthCookie() {
-      document.cookie = 'vegvisr_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.vegvisr.org;'
-      document.cookie = 'vegvisr_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'
+      if (typeof document === 'undefined') return
+      const isVegvisr = window.location.hostname.endsWith('vegvisr.org')
+      const domain = isVegvisr ? '; Domain=.vegvisr.org' : ''
+      document.cookie = `vegvisr_token=; Path=/; Max-Age=0; SameSite=Lax; Secure${domain}`
     },
 
     setUser(user) {
-      this.email = user.email || ''
-      this.role = user.role || ''
-      this.user_id = user.user_id || ''
-      this.emailVerificationToken = user.emailVerificationToken || ''
+      this.email = user.email
+      this.role = user.role
+      this.user_id = user.user_id
+      this.emailVerificationToken = user.emailVerificationToken
+      this.phone = user.phone || null
+      this.phoneVerifiedAt = user.phoneVerifiedAt || null
       this.loggedIn = true
 
-      // Persist to localStorage
-      localStorage.setItem('app_user', JSON.stringify({
-        email: this.email,
-        role: this.role,
-        user_id: this.user_id,
-        emailVerificationToken: this.emailVerificationToken
-      }))
-
-      // Set auth cookie
       if (user.emailVerificationToken) {
         this.setAuthCookie(user.emailVerificationToken)
       }
+
+      localStorage.setItem('helloworld_user', JSON.stringify({
+        email: user.email,
+        role: user.role,
+        user_id: user.user_id,
+        emailVerificationToken: user.emailVerificationToken,
+        phone: user.phone,
+        phoneVerifiedAt: user.phoneVerifiedAt,
+      }))
     },
 
     logout() {
-      this.email = ''
-      this.role = ''
-      this.user_id = ''
-      this.emailVerificationToken = ''
+      this.email = null
+      this.role = null
+      this.user_id = null
+      this.emailVerificationToken = null
+      this.phone = null
+      this.phoneVerifiedAt = null
       this.loggedIn = false
-
-      localStorage.removeItem('app_user')
-      sessionStorage.removeItem('email_session_verified')
+      localStorage.removeItem('helloworld_user')
+      sessionStorage.removeItem('helloworld_session_verified')
       this.clearAuthCookie()
     },
 
     loadFromStorage() {
-      const stored = localStorage.getItem('app_user')
+      const stored = localStorage.getItem('helloworld_user')
       if (stored) {
         try {
           const user = JSON.parse(stored)
-          this.email = user.email || ''
-          this.role = user.role || ''
-          this.user_id = user.user_id || ''
-          this.emailVerificationToken = user.emailVerificationToken || ''
-          this.loggedIn = !!user.email
+          this.email = user.email
+          this.role = user.role
+          this.user_id = user.user_id
+          this.emailVerificationToken = user.emailVerificationToken
+          this.phone = user.phone
+          this.phoneVerifiedAt = user.phoneVerifiedAt
+          this.loggedIn = true
+          return true
         } catch (e) {
           console.error('Failed to load user from storage:', e)
         }
       }
+      return false
     },
 
     async fetchUserContext(email) {
-      try {
-        // Get user role via auth-worker
-        const roleResponse = await fetch(
-          `${AUTH_API}/get-role?email=${encodeURIComponent(email)}`
-        )
-        const roleData = await roleResponse.json()
-
-        // Get user data via auth-worker
-        const userResponse = await fetch(
-          `${AUTH_API}/userdata?email=${encodeURIComponent(email)}`
-        )
-        const userData = await userResponse.json()
-
-        return {
-          email,
-          role: roleData.role || 'User',
-          user_id: userData.user_id || '',
-          emailVerificationToken: userData.emailVerificationToken || ''
-        }
-      } catch (error) {
-        console.error('Failed to fetch user context:', error)
-        return null
+      const roleRes = await fetch(`${AUTH_API}/get-role?email=${encodeURIComponent(email)}`)
+      if (!roleRes.ok) {
+        throw new Error('User not found')
       }
-    }
-  }
+      const roleData = await roleRes.json()
+
+      const userDataRes = await fetch(`${AUTH_API}/userdata?email=${encodeURIComponent(email)}`)
+      if (!userDataRes.ok) {
+        throw new Error('Unable to fetch user data')
+      }
+      const userData = await userDataRes.json()
+
+      return {
+        email,
+        role: roleData.role,
+        user_id: userData.user_id,
+        emailVerificationToken: userData.emailVerificationToken,
+        phone: userData.phone,
+        phoneVerifiedAt: userData.phoneVerifiedAt,
+      }
+    },
+  },
 })

@@ -27,7 +27,7 @@ onMounted(async () => {
 
   // Check if already logged in
   userStore.loadFromStorage()
-  const emailVerified = sessionStorage.getItem('email_session_verified') === '1'
+  const emailVerified = sessionStorage.getItem('helloworld_session_verified') === '1'
   if (userStore.loggedIn && emailVerified) {
     router.push('/')
   }
@@ -114,7 +114,7 @@ async function verifyMagicToken(token) {
           ...userContext,
           emailVerificationToken: data.token || token
         })
-        sessionStorage.setItem('email_session_verified', '1')
+        sessionStorage.setItem('helloworld_session_verified', '1')
         success.value = 'Login successful! Redirecting...'
 
         // Small delay to show success message
@@ -127,7 +127,7 @@ async function verifyMagicToken(token) {
           email: data.email,
           emailVerificationToken: data.token || token
         })
-        sessionStorage.setItem('email_session_verified', '1')
+        sessionStorage.setItem('helloworld_session_verified', '1')
         router.push('/')
       }
     } else {

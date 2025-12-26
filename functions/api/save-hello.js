@@ -1,83 +1,52 @@
-export async function onRequest(context) {
-  const { request, env } = context
+/**
+ * HelloWorld Save API - Cloudflare Pages Function
+ * Saves content to Knowledge Graph with proper authentication
+ * Pattern copied from Web-Content-Extractor extract-content.js
+ */
 
-  // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Content-Type': 'application/json'
-  }
+export async function onRequestPost(context) {
+  const { request, env } = context;
 
-  // Handle preflight
+  const corsHeaders = buildCorsHeaders(request);
+
+  // Handle OPTIONS request for CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
-  // Only allow POST
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: corsHeaders
-    })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verify authentication
-    const authHeader = request.headers.get('Authorization')
-    const token = authHeader?.replace('Bearer ', '') ||
-                  getCookie(request, 'vegvisr_token')
-
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized - No token provided' }), {
-        status: 401,
-        headers: corsHeaders
-      })
+    if (!isAllowedOrigin(request)) {
+      return unauthorizedResponse(request, corsHeaders, 'Origin not allowed');
     }
 
-    // Validate token with auth-worker service binding
-    if (!env?.AUTH_WORKER?.fetch) {
-      return new Response(JSON.stringify({
-        error: 'Auth Worker service binding not configured'
-      }), {
-        status: 500,
-        headers: corsHeaders
-      })
+    const authResult = await verifyAdminSession(request);
+    if (!authResult.ok) {
+      return unauthorizedResponse(request, corsHeaders, 'Login required', authResult.status);
     }
 
-    const authResponse = await env.AUTH_WORKER.fetch(
-      'https://helloworld-auth-worker/validate-token',
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      }
-    )
-    const authData = await authResponse.json()
-
-    if (!authData.valid) {
-      return new Response(JSON.stringify({ error: 'Invalid or expired token' }), {
-        status: 401,
+    let payload;
+    try {
+      payload = await request.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ error: 'Invalid JSON payload' }), {
+        status: 400,
         headers: corsHeaders
-      })
+      });
     }
 
-    // Parse request body
-    const body = await request.json()
-    const { title, message, email } = body
+    const { title, message, email } = payload || {};
 
     if (!message) {
       return new Response(JSON.stringify({ error: 'Message is required' }), {
         status: 400,
         headers: corsHeaders
-      })
+      });
     }
 
     // Create graph data
-    const graphId = `graph_${Date.now()}`
-    const nodeId = crypto.randomUUID()
-    const now = new Date().toISOString()
+    const graphId = `graph_${Date.now()}`;
+    const nodeId = crypto.randomUUID();
+    const now = new Date().toISOString();
 
     const graphData = {
       metadata: {
@@ -102,7 +71,7 @@ export async function onRequest(context) {
         }
       ],
       edges: []
-    }
+    };
 
     // Save to Knowledge Graph using SERVICE BINDING
     if (!env?.KNOWLEDGE_GRAPH_WORKER?.fetch) {
@@ -111,7 +80,7 @@ export async function onRequest(context) {
       }), {
         status: 500,
         headers: corsHeaders
-      })
+      });
     }
 
     const kgResponse = await env.KNOWLEDGE_GRAPH_WORKER.fetch(
@@ -125,27 +94,27 @@ export async function onRequest(context) {
           override: false
         })
       }
-    )
+    );
 
-    const kgResponseText = await kgResponse.text()
+    const kgResponseText = await kgResponse.text();
 
     if (!kgResponse.ok) {
-      console.error('Knowledge Graph error:', kgResponseText)
+      console.error('Knowledge Graph error:', kgResponseText);
       return new Response(JSON.stringify({
         error: 'Failed to save to Knowledge Graph',
         details: kgResponseText
       }), {
         status: 500,
         headers: corsHeaders
-      })
+      });
     }
 
     // Try to parse response as JSON, fallback to text
-    let kgResult
+    let kgResult;
     try {
-      kgResult = JSON.parse(kgResponseText)
+      kgResult = JSON.parse(kgResponseText);
     } catch {
-      kgResult = { raw: kgResponseText }
+      kgResult = { raw: kgResponseText };
     }
 
     return new Response(JSON.stringify({
@@ -157,22 +126,137 @@ export async function onRequest(context) {
     }), {
       status: 200,
       headers: corsHeaders
-    })
+    });
 
   } catch (error) {
-    console.error('API error:', error)
+    console.error('API error:', error);
     return new Response(JSON.stringify({
-      error: 'Internal server error',
-      details: error.message
+      error: error.message || 'Failed to save content'
     }), {
       status: 500,
       headers: corsHeaders
-    })
+    });
   }
 }
 
-function getCookie(request, name) {
-  const cookies = request.headers.get('Cookie') || ''
-  const match = cookies.match(new RegExp(`${name}=([^;]+)`))
-  return match ? match[1] : null
+function buildCorsHeaders(request) {
+  const origin = request.headers.get('Origin');
+  const allowedOrigin = origin === 'https://helloworld.vegvisr.org' ? origin : '*';
+  const headers = {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json'
+  };
+
+  if (allowedOrigin !== '*') {
+    headers['Access-Control-Allow-Credentials'] = 'true';
+  }
+
+  return headers;
+}
+
+function unauthorizedResponse(request, corsHeaders, reason, status = 401) {
+  const accept = request.headers.get('Accept') || '';
+  if (accept.includes('text/html')) {
+    const body = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login Required</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; margin: 0; padding: 48px; background: #f6f7fb; color: #1f2a37; }
+      .card { max-width: 560px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 12px; box-shadow: 0 6px 24px rgba(15, 23, 42, 0.08); }
+      h1 { margin: 0 0 12px; font-size: 1.5rem; }
+      p { margin: 0 0 18px; line-height: 1.6; }
+      a.button { display: inline-block; padding: 10px 16px; background: #1d4ed8; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; }
+      .note { margin-top: 16px; font-size: 0.9rem; color: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Login required</h1>
+      <p>Please log in to HelloWorld to continue.</p>
+      <a class="button" href="https://helloworld.vegvisr.org/login">Go to Login</a>
+      <div class="note">${reason || 'Access restricted'}</div>
+    </div>
+  </body>
+</html>`;
+
+    return new Response(body, {
+      status,
+      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' }
+    });
+  }
+
+  return new Response(JSON.stringify({ error: reason || 'Unauthorized' }), {
+    status,
+    headers: corsHeaders
+  });
+}
+
+function isAllowedOrigin(request) {
+  const origin = request.headers.get('Origin');
+  if (origin && origin !== 'https://helloworld.vegvisr.org') {
+    return false;
+  }
+
+  const referer = request.headers.get('Referer');
+  if (referer && !referer.startsWith('https://helloworld.vegvisr.org/')) {
+    return false;
+  }
+
+  return true;
+}
+
+async function verifyAdminSession(request) {
+  try {
+    const token = getAuthToken(request);
+    if (!token) {
+      return { ok: false, status: 401 };
+    }
+
+    const response = await fetch('https://dashboard.vegvisr.org/auth/validate-token', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      return { ok: false, status: response.status };
+    }
+
+    const data = await response.json().catch(() => null);
+    const role = data?.role;
+    if (data?.valid && (role === 'Superadmin' || role === 'Admin' || role === 'User')) {
+      return { ok: true, status: 200 };
+    }
+
+    return { ok: false, status: 403 };
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    return { ok: false, status: 500 };
+  }
+}
+
+function getAuthToken(request) {
+  const headerToken = request.headers.get('X-API-Token');
+  if (headerToken) return headerToken;
+
+  const authHeader = request.headers.get('Authorization') || '';
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7);
+  }
+
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map((entry) => {
+      const [key, ...rest] = entry.trim().split('=');
+      return [key, rest.join('=')];
+    })
+  );
+  return cookies.vegvisr_token || null;
 }

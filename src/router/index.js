@@ -34,7 +34,7 @@ router.beforeEach((to, from, next) => {
   }
 
   // Check session verification
-  const emailVerified = sessionStorage.getItem('email_session_verified') === '1'
+  const emailVerified = sessionStorage.getItem('helloworld_session_verified') === '1'
   const sessionVerified = emailVerified
 
   if (to.meta.requiresAuth) {
