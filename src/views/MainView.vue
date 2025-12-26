@@ -5,14 +5,35 @@ import { useUserStore } from '@/stores/userStore'
 const userStore = useUserStore()
 
 // State
-const message = ref('Hello World!')
+const title = ref('My Document')
+const content = ref(`# Hello World
+
+Write your markdown content here.
+
+## Features
+- **Bold** and *italic* text
+- Lists and bullet points
+- Code blocks
+
+\`\`\`javascript
+console.log('Hello from the Knowledge Graph!')
+\`\`\`
+
+---
+
+Add your own content above!
+`)
 const saving = ref(false)
 const result = ref(null)
 const error = ref('')
 
 async function saveToKnowledgeGraph() {
-  if (!message.value.trim()) {
-    error.value = 'Please enter a message'
+  if (!title.value.trim()) {
+    error.value = 'Please enter a title'
+    return
+  }
+  if (!content.value.trim()) {
+    error.value = 'Please enter some content'
     return
   }
 
@@ -27,8 +48,8 @@ async function saveToKnowledgeGraph() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        title: 'Hello World Document',
-        message: message.value,
+        title: title.value,
+        content: content.value,
         email: userStore.email
       })
     })
@@ -60,20 +81,32 @@ async function saveToKnowledgeGraph() {
     </div>
 
     <div class="action-card">
-      <h2>Create a Document</h2>
+      <h2>Create a Markdown Document</h2>
       <p class="description">
-        Enter a custom message and save it to the Vegvisr Knowledge Graph.
+        Write your content in Markdown format and save it to the Vegvisr Knowledge Graph.
       </p>
 
       <div class="form-group">
-        <label for="message">Your Message</label>
+        <label for="title">Document Title</label>
         <input
-          id="message"
-          v-model="message"
+          id="title"
+          v-model="title"
           type="text"
-          placeholder="Enter your message..."
+          placeholder="Enter document title..."
           :disabled="saving"
         />
+      </div>
+
+      <div class="form-group">
+        <label for="content">Content (Markdown)</label>
+        <textarea
+          id="content"
+          v-model="content"
+          placeholder="Write your markdown content here..."
+          :disabled="saving"
+          rows="15"
+        ></textarea>
+        <p class="hint">Supports Markdown: **bold**, *italic*, # headings, - lists, ```code blocks```</p>
       </div>
 
       <button @click="saveToKnowledgeGraph" :disabled="saving" class="save-btn">
@@ -196,8 +229,33 @@ async function saveToKnowledgeGraph() {
   border-color: #4f6d7a;
 }
 
-.form-group input:disabled {
+.form-group input:disabled,
+.form-group textarea:disabled {
   background: #f5f5f5;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 200px;
+  transition: border-color 0.2s;
+}
+
+.form-group textarea:focus {
+  outline: none;
+  border-color: #4f6d7a;
+}
+
+.hint {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #888;
 }
 
 .save-btn {

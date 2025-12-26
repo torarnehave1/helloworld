@@ -34,10 +34,10 @@ export async function onRequestPost(context) {
       });
     }
 
-    const { title, message, email } = payload || {};
+    const { title, content, email } = payload || {};
 
-    if (!message) {
-      return new Response(JSON.stringify({ error: 'Message is required' }), {
+    if (!content) {
+      return new Response(JSON.stringify({ error: 'Content is required' }), {
         status: 400,
         headers: corsHeaders
       });
@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
     const graphData = {
       metadata: {
         title: title || 'Hello World Document',
-        description: `Hello World document created by ${email || 'unknown'} at ${now}`,
+        description: `Markdown document created by ${email || 'unknown'} at ${now}`,
         createdBy: 'helloworld-app',
         version: 0
       },
@@ -61,7 +61,7 @@ export async function onRequestPost(context) {
           color: '#4f6d7a',
           label: title || 'Hello World',
           type: 'fulltext',
-          info: `# ${title || 'Hello World'}\n\n${message}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
+          info: `${content}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
           bibl: ['https://helloworld.vegvisr.org'],
           imageWidth: null,
           imageHeight: null,
