@@ -7,8 +7,9 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
-// API Endpoint - All auth requests go through the app's auth-worker
+// API Endpoints
 const AUTH_API = 'https://helloworld-auth-worker.torarnehave.workers.dev'
+const EMAIL_WORKER = 'https://email-worker.torarnehave.workers.dev'
 
 // State
 const email = ref('')
@@ -62,17 +63,18 @@ async function checkEmail() {
   }
 }
 
-// Send magic link
+// Send magic link (call email-worker directly like WCX does)
 async function sendMagicLink() {
   loading.value = true
   error.value = ''
 
   try {
-    const response = await fetch(`${AUTH_API}/magic/send`, {
+    const response = await fetch(`${EMAIL_WORKER}/login/magic/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: email.value
+        email: email.value,
+        redirectUrl: 'https://helloworld.vegvisr.org/login'
       })
     })
 
@@ -99,7 +101,7 @@ async function verifyMagicToken(token) {
 
   try {
     const response = await fetch(
-      `${AUTH_API}/magic/verify?token=${encodeURIComponent(token)}`
+      `${EMAIL_WORKER}/login/magic/verify?token=${encodeURIComponent(token)}`
     )
     const data = await response.json()
 
