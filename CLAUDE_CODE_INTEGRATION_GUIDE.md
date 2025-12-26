@@ -38,7 +38,8 @@ my-new-app/
 │       └── your-api.js      # Cloudflare Worker API
 ├── package.json
 ├── vite.config.js
-└── wrangler.toml            # Cloudflare config
+├── wrangler.toml            # Cloudflare config
+└── README.md                # Project documentation (REQUIRED)
 ```
 
 ---
@@ -551,8 +552,15 @@ export async function onRequest(context) {
     }
 
     // Validate token with auth service
+    // IMPORTANT: Use /auth/validate-token with Bearer token in header
     const authResponse = await fetch(
-      `https://dashboard.vegvisr.org/validate-token?token=${token}`
+      'https://dashboard.vegvisr.org/auth/validate-token',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
     )
     const authData = await authResponse.json()
 
@@ -734,7 +742,7 @@ header {
 | `https://email-worker.torarnehave.workers.dev/login/magic/verify?token={token}` | GET | Verify magic token |
 | `https://dashboard.vegvisr.org/get-role?email={email}` | GET | Get user role |
 | `https://dashboard.vegvisr.org/userdata?email={email}` | GET | Get user data |
-| `https://dashboard.vegvisr.org/validate-token?token={token}` | GET | Validate auth token |
+| `https://dashboard.vegvisr.org/auth/validate-token` | GET | Validate auth token (use `Authorization: Bearer {token}` header) |
 
 ### Knowledge Graph
 
