@@ -37,7 +37,13 @@ export async function onRequest(context) {
 
     // Validate token with auth service
     const authResponse = await fetch(
-      `https://dashboard.vegvisr.org/validate-token?token=${encodeURIComponent(token)}`
+      'https://dashboard.vegvisr.org/auth/validate-token',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
     )
     const authData = await authResponse.json()
 
