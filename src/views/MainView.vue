@@ -24,8 +24,7 @@ async function saveToKnowledgeGraph() {
     const response = await fetch('/api/save-hello', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${userStore.emailVerificationToken}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         title: 'Hello World Document',

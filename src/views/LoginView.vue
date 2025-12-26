@@ -106,30 +106,16 @@ async function verifyMagicToken(token) {
     const data = await response.json()
 
     if (data.success && data.email) {
-      // Fetch full user context
+      // Fetch full user context (includes emailVerificationToken from /userdata)
       const userContext = await userStore.fetchUserContext(data.email)
 
-      if (userContext) {
-        userStore.setUser({
-          ...userContext,
-          emailVerificationToken: data.token || token
-        })
-        sessionStorage.setItem('helloworld_session_verified', '1')
-        success.value = 'Login successful! Redirecting...'
+      userStore.setUser(userContext)
+      sessionStorage.setItem('helloworld_session_verified', '1')
+      success.value = 'Login successful! Redirecting...'
 
-        // Small delay to show success message
-        setTimeout(() => {
-          router.push('/')
-        }, 500)
-      } else {
-        // Still log in even if context fetch fails
-        userStore.setUser({
-          email: data.email,
-          emailVerificationToken: data.token || token
-        })
-        sessionStorage.setItem('helloworld_session_verified', '1')
+      setTimeout(() => {
         router.push('/')
-      }
+      }, 500)
     } else {
       error.value = data.error || 'Invalid or expired magic link. Please request a new one.'
       step.value = 'email'

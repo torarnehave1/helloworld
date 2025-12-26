@@ -231,7 +231,7 @@ async function verifyAdminSession(request) {
 
     const data = await response.json().catch(() => null);
     const role = data?.role;
-    if (data?.valid && (role === 'Superadmin' || role === 'Admin' || role === 'User')) {
+    if (data?.valid && (role === 'Superadmin' || role === 'Admin')) {
       return { ok: true, status: 200 };
     }
 
