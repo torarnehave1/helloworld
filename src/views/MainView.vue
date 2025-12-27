@@ -33,11 +33,8 @@ const error = ref('')
 const uploading = ref(false)
 const textareaRef = ref(null)
 
-// Image upload handler - uses api.vegvisr.org/upload (shared R2 bucket)
-async function handleImageUpload(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-
+// Core function to upload a file and insert markdown image at cursor
+async function uploadAndInsertImage(file, altTextOverride = null) {
   if (!file.type.startsWith('image/')) {
     error.value = 'Please select a valid image file'
     return
@@ -64,7 +61,7 @@ async function handleImageUpload(event) {
 
     // Insert markdown image at cursor position
     const textarea = textareaRef.value
-    const altText = file.name.replace(/\.[^/.]+$/, '')
+    const altText = altTextOverride || file.name.replace(/\.[^/.]+$/, '') || 'pasted-image'
     const markdownImage = `![${altText}](${imageUrl})`
 
     if (textarea) {
@@ -88,9 +85,37 @@ async function handleImageUpload(event) {
     console.error('Upload error:', e)
   } finally {
     uploading.value = false
-    // Reset file input
-    event.target.value = ''
   }
+}
+
+// File input handler - uses the shared upload function
+async function handleImageUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  await uploadAndInsertImage(file)
+  // Reset file input
+  event.target.value = ''
+}
+
+// Paste handler - intercepts image paste and uploads
+async function handlePaste(event) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      event.preventDefault() // Prevent default paste behavior
+      const file = item.getAsFile()
+      if (file) {
+        // Generate a timestamp-based alt text for pasted images
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+        await uploadAndInsertImage(file, `image-${timestamp}`)
+      }
+      return // Only handle the first image
+    }
+  }
+  // If no image found, let the default paste behavior handle text
 }
 
 async function saveToKnowledgeGraph() {
@@ -190,8 +215,9 @@ async function saveToKnowledgeGraph() {
           placeholder="Write your markdown content here..."
           :disabled="saving || uploading"
           rows="15"
+          @paste="handlePaste"
         ></textarea>
-        <p class="hint">Supports Markdown: **bold**, *italic*, # headings, - lists, ```code blocks```, ![alt](url) for images</p>
+        <p class="hint">Supports Markdown: **bold**, *italic*, # headings, - lists, ```code blocks```, ![alt](url) for images. Paste images directly!</p>
       </div>
 
       <button @click="saveToKnowledgeGraph" :disabled="saving" class="save-btn">
