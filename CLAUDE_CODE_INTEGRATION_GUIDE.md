@@ -702,6 +702,89 @@ async function handleImageUpload(event) {
 
 ---
 
+## Knowledge Graph API Documentation
+
+The Knowledge Graph Worker provides an OpenAPI 3.0.3 specification endpoint for discovering all available API endpoints and their requirements.
+
+### OpenAPI Docs Endpoint
+
+```
+GET https://knowledge-graph-worker.torarnehave.workers.dev/openapi.json
+```
+
+This returns the full OpenAPI specification including:
+- All available endpoints
+- Request/response schemas
+- Authentication requirements
+- Required scopes for protected endpoints
+
+### Key Endpoints
+
+| Endpoint | Method | Auth Required | Scope | Description |
+|----------|--------|---------------|-------|-------------|
+| `/openapi.json` | GET | No | - | API documentation |
+| `/saveGraphWithHistory` | POST | Yes | `graph:write` | Save graph with version history (recommended) |
+| `/getknowgraph` | GET | No | - | Get a single graph by ID |
+| `/getknowgraphs` | GET | No | - | List all graphs |
+| `/getknowgraphhistory` | GET | No | - | Get version history for a graph |
+| `/getknowgraphversion` | GET | No | - | Get specific version of a graph |
+| `/duplicateknowgraph` | POST | Yes | `graph:write` | Duplicate an existing graph |
+| `/deleteknowgraph` | POST | Yes | `graph:delete` | Delete a graph |
+| `/public-graph` | GET | No | - | Get graph as HTML (SEO) |
+| `/slideshow` | GET | No | - | Generate slideshow from fulltext node |
+| `/getTemplates` | GET | No | - | List graph templates |
+| `/addTemplate` | POST | Yes | `template:write` | Add a new template |
+
+### Authentication Methods
+
+The Knowledge Graph API supports three authentication methods:
+
+1. **API Token** (for external API access)
+   ```
+   X-API-Token: vv_prod_abc123...
+   ```
+
+2. **Session-based** (for logged-in web users)
+   ```
+   x-user-role: User
+   ```
+
+3. **Service Binding** (for worker-to-worker calls)
+   - No headers needed - uses `env.KNOWLEDGE_GRAPH_WORKER.fetch()`
+
+### Example: Fetching API Docs
+
+```javascript
+// Get the OpenAPI spec to discover endpoints
+const response = await fetch('https://knowledge-graph-worker.torarnehave.workers.dev/openapi.json')
+const spec = await response.json()
+
+console.log('Available endpoints:', Object.keys(spec.paths))
+console.log('Security schemes:', spec.components.securitySchemes)
+```
+
+### Example: Saving with API Token
+
+```javascript
+const response = await fetch('https://knowledge-graph-worker.torarnehave.workers.dev/saveGraphWithHistory', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Token': 'vv_prod_your_token_here'
+  },
+  body: JSON.stringify({
+    id: 'graph_123',
+    graphData: {
+      metadata: { title: 'My Graph', version: 0 },
+      nodes: [],
+      edges: []
+    }
+  })
+})
+```
+
+---
+
 ## Summary Checklist
 
 - [ ] Auth Worker deployed (`myapp-auth-worker`)

@@ -143,6 +143,33 @@ Please create all necessary files following the exact patterns from CLAUDE_CODE_
 
 ---
 
+## Knowledge Graph API Discovery
+
+The Knowledge Graph Worker provides an OpenAPI 3.0.3 specification endpoint:
+
+```
+GET https://knowledge-graph-worker.torarnehave.workers.dev/openapi.json
+```
+
+### Key Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/openapi.json` | GET | No | API documentation |
+| `/saveGraphWithHistory` | POST | Yes (`graph:write`) | Save with version history |
+| `/getknowgraph?id=` | GET | No | Get graph by ID |
+| `/getknowgraphs` | GET | No | List all graphs |
+| `/deleteknowgraph` | POST | Yes (`graph:delete`) | Delete graph |
+| `/duplicateknowgraph` | POST | Yes (`graph:write`) | Duplicate graph |
+
+### Authentication Methods
+
+1. **Service Binding** (Pages Functions) - No headers needed
+2. **Session** (Web users) - `x-user-role` header
+3. **API Token** (External) - `X-API-Token` header
+
+---
+
 ## Example: Hello World App
 
 ```
