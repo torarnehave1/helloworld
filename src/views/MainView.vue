@@ -216,6 +216,10 @@ async function saveToKnowledgeGraph() {
       <div v-if="result" class="result-card">
         <h3>Saved Successfully!</h3>
         <div class="result-details">
+          <div class="result-row" v-if="result.graphUrl">
+            <span class="label">View Graph:</span>
+            <a :href="result.graphUrl" target="_blank" class="graph-link">{{ result.graphUrl }}</a>
+          </div>
           <div class="result-row">
             <span class="label">Graph ID:</span>
             <code>{{ result.graphId }}</code>
@@ -463,6 +467,16 @@ async function saveToKnowledgeGraph() {
   border-radius: 4px;
   font-family: monospace;
   font-size: 0.85rem;
+}
+
+.graph-link {
+  color: #2563eb;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.graph-link:hover {
+  text-decoration: underline;
 }
 
 .info-card {

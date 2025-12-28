@@ -117,10 +117,13 @@ export async function onRequestPost(context) {
       kgResult = { raw: kgResponseText };
     }
 
+    const graphUrl = `https://www.vegvisr.org/gnew-viewer?graphId=${graphId}`;
+
     return new Response(JSON.stringify({
       success: true,
       graphId: graphId,
       nodeId: nodeId,
+      graphUrl: graphUrl,
       message: 'Document saved to Knowledge Graph',
       kgResponse: kgResult
     }), {
