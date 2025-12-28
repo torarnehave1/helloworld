@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/userStore'
+import LogoBlack from '@/assets/img/Black.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -143,7 +144,10 @@ function handleSubmit() {
   <div class="login-container">
     <div class="login-card">
       <div class="login-header">
-        <h1>Hello Vegvisr</h1>
+        <h1>
+          <img :src="LogoBlack" alt="Vegvisr" class="login-logo" />
+          Hello Vegvisr
+        </h1>
         <p class="subtitle">Sign in to continue</p>
       </div>
 
@@ -222,9 +226,18 @@ function handleSubmit() {
 }
 
 .login-header h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   color: #4f6d7a;
   font-size: 1.75rem;
   margin-bottom: 8px;
+}
+
+.login-logo {
+  height: 40px;
+  width: auto;
 }
 
 .subtitle {

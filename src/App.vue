@@ -1,6 +1,7 @@
 <script setup>
 import { useUserStore } from '@/stores/userStore'
 import { useRouter } from 'vue-router'
+import LogoWhite from '@/assets/img/White.svg'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -15,7 +16,10 @@ function logout() {
   <div id="app">
     <header v-if="userStore.loggedIn">
       <div class="header-content">
-        <router-link to="/" class="logo">Hello Vegvisr</router-link>
+        <router-link to="/" class="logo">
+          <img :src="LogoWhite" alt="Vegvisr" class="logo-icon" />
+          Hello Vegvisr
+        </router-link>
         <nav class="nav-links">
           <router-link to="/" class="nav-link">Create</router-link>
           <router-link to="/about" class="nav-link">About</router-link>
@@ -54,10 +58,18 @@ header {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   font-size: 1.25rem;
   font-weight: 600;
   color: white;
   text-decoration: none;
+}
+
+.logo-icon {
+  height: 28px;
+  width: auto;
 }
 
 .logo:hover {

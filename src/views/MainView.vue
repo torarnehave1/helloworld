@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/userStore'
+import LogoWhite from '@/assets/img/White.svg'
 
 const userStore = useUserStore()
 
@@ -164,7 +165,10 @@ async function saveToKnowledgeGraph() {
 <template>
   <div class="main-view">
     <div class="welcome-card">
-      <h1>Welcome to Hello Vegvisr!</h1>
+      <h1>
+        <img :src="LogoWhite" alt="Vegvisr" class="welcome-logo" />
+        Welcome to Hello Vegvisr!
+      </h1>
       <p class="welcome-text">
         You're logged in as <strong>{{ userStore.email }}</strong>
         <span v-if="userStore.role" class="role-badge">{{ userStore.role }}</span>
@@ -281,8 +285,17 @@ async function saveToKnowledgeGraph() {
 }
 
 .welcome-card h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   font-size: 1.75rem;
   margin-bottom: 10px;
+}
+
+.welcome-logo {
+  height: 40px;
+  width: auto;
 }
 
 .welcome-text {
