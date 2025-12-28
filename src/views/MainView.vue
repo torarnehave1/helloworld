@@ -11,11 +11,47 @@ const UPLOAD_API = 'https://api.vegvisr.org/upload'
 // State
 const title = ref('My Document')
 const content = ref('')
+const youtubeUrl = ref('')
 const saving = ref(false)
 const result = ref(null)
 const error = ref('')
 const uploading = ref(false)
 const textareaRef = ref(null)
+
+// Extract YouTube video ID from various URL formats
+function extractYouTubeId(url) {
+  if (!url) return null
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([^&\n?#]+)/,
+    /^([a-zA-Z0-9_-]{11})$/ // Direct video ID
+  ]
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+// Add YouTube video
+function addYouTubeVideo() {
+  const url = prompt('Enter YouTube URL:')
+  if (!url) return
+
+  const videoId = extractYouTubeId(url.trim())
+  if (!videoId) {
+    error.value = 'Invalid YouTube URL. Please enter a valid YouTube video URL.'
+    return
+  }
+
+  // Normalize to standard format
+  youtubeUrl.value = `https://www.youtube.com/watch?v=${videoId}`
+  error.value = ''
+}
+
+// Remove YouTube video
+function removeYouTubeVideo() {
+  youtubeUrl.value = ''
+}
 
 // Core function to upload a file and insert markdown image at cursor
 async function uploadAndInsertImage(file, altTextOverride = null) {
@@ -125,7 +161,8 @@ async function saveToKnowledgeGraph() {
       body: JSON.stringify({
         title: title.value,
         content: content.value,
-        email: userStore.email
+        email: userStore.email,
+        youtubeUrl: youtubeUrl.value || null
       })
     })
 
@@ -149,8 +186,8 @@ async function saveToKnowledgeGraph() {
   <div class="main-view">
     <div class="welcome-card">
       <h1>
-        <img :src="LogoWhite" alt="Vegvisr" class="welcome-logo" />
-        Welcome to Hello Vegvisr!
+        
+        Welcome to <img :src="LogoWhite" alt="Vegvisr" class="welcome-logo" />Hello Vegvisr!
       </h1>
       <p class="welcome-text">
         You're logged in as <strong>{{ userStore.email }}</strong>
@@ -194,6 +231,23 @@ async function saveToKnowledgeGraph() {
           >
             {{ uploading ? 'Uploading...' : 'Add Image' }}
           </button>
+          <button
+            type="button"
+            class="toolbar-btn toolbar-btn-youtube"
+            @click="addYouTubeVideo"
+            :disabled="saving"
+            title="Add YouTube video"
+          >
+            Add YouTube
+          </button>
+        </div>
+
+        <!-- YouTube Video Indicator -->
+        <div v-if="youtubeUrl" class="youtube-indicator">
+          <span class="youtube-icon">▶</span>
+          <span class="youtube-label">YouTube Video:</span>
+          <a :href="youtubeUrl" target="_blank" class="youtube-url">{{ youtubeUrl }}</a>
+          <button type="button" class="youtube-remove" @click="removeYouTubeVideo" title="Remove video">×</button>
         </div>
         <textarea
           id="content"
@@ -387,6 +441,63 @@ async function saveToKnowledgeGraph() {
 .toolbar-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.toolbar-btn-youtube {
+  background: #ffe6e6;
+  border-color: #ffcccc;
+  color: #cc0000;
+}
+
+.toolbar-btn-youtube:hover:not(:disabled) {
+  background: #ffcccc;
+}
+
+.youtube-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff0f0;
+  border: 1px solid #ffcccc;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.youtube-icon {
+  color: #cc0000;
+  font-size: 1rem;
+}
+
+.youtube-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.youtube-url {
+  color: #cc0000;
+  text-decoration: none;
+  word-break: break-all;
+  flex: 1;
+}
+
+.youtube-url:hover {
+  text-decoration: underline;
+}
+
+.youtube-remove {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.youtube-remove:hover {
+  color: #cc0000;
 }
 
 .hint {

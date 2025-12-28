@@ -34,7 +34,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    const { title, content, email } = payload || {};
+    const { title, content, email, youtubeUrl } = payload || {};
 
     if (!content) {
       return new Response(JSON.stringify({ error: 'Content is required' }), {
@@ -48,29 +48,63 @@ export async function onRequestPost(context) {
     const nodeId = crypto.randomUUID();
     const now = new Date().toISOString();
 
+    // Start with the fulltext node
+    const nodes = [
+      {
+        id: nodeId,
+        color: '#4f6d7a',
+        label: title || 'Hello Vegvisr',
+        type: 'fulltext',
+        info: `${content}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
+        bibl: ['https://hello.vegvisr.org'],
+        imageWidth: null,
+        imageHeight: null,
+        visible: true,
+        position: { x: 0, y: 0 },
+        path: null
+      }
+    ];
+
+    const edges = [];
+
+    // If YouTube URL provided, create a separate youtube-video node
+    let youtubeNodeId = null;
+    if (youtubeUrl) {
+      youtubeNodeId = crypto.randomUUID();
+
+
+      nodes.push({
+        id: youtubeNodeId,
+        color: '#FF0000',
+        label: `YouTube: ${title || 'Video'}`,
+        type: 'youtube-video',
+        info: `Video attached to: ${title || 'Hello Vegvisr Document'}\n\nCreated by: ${email || 'unknown'}\nCreated at: ${now}`,
+        bibl: [youtubeUrl],
+        imageWidth: '100%',
+        imageHeight: '100%',
+        visible: true,
+        position: { x: 200, y: 0 },
+        path: youtubeUrl
+      });
+
+      // Create an edge connecting the fulltext node to the youtube node
+      edges.push({
+        id: `edge_${Date.now()}`,
+        source: nodeId,
+        target: youtubeNodeId,
+        label: 'has video'
+      });
+    }
+
     const graphData = {
       metadata: {
         title: title || 'Hello Vegvisr Document',
-        description: `Markdown document created by ${email || 'unknown'} at ${now}`,
+        description: `Markdown document created by ${email || 'unknown'} at ${now}${youtubeUrl ? ' (with YouTube video)' : ''}`,
         createdBy: 'helloworld-app',
         version: 0
       },
-      nodes: [
-        {
-          id: nodeId,
-          color: '#4f6d7a',
-          label: title || 'Hello Vegvisr',
-          type: 'fulltext',
-          info: `${content}\n\n---\n\n*Created by: ${email || 'unknown'}*\n\n*Created at: ${now}*`,
-          bibl: ['https://hello.vegvisr.org'],
-          imageWidth: null,
-          imageHeight: null,
-          visible: true,
-          position: { x: 0, y: 0 },
-          path: null
-        }
-      ],
-      edges: []
+      nodes: nodes,
+      edges: edges
     };
 
     // Save to Knowledge Graph using SERVICE BINDING
