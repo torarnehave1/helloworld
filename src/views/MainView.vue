@@ -10,24 +10,7 @@ const UPLOAD_API = 'https://api.vegvisr.org/upload'
 
 // State
 const title = ref('My Document')
-const content = ref(`# Hello Vegvisr
-
-Write your markdown content here.
-
-## Features
-- **Bold** and *italic* text
-- Lists and bullet points
-- Code blocks
-- Images (click the image button below)
-
-\`\`\`javascript
-console.log('Hello from the Knowledge Graph!')
-\`\`\`
-
----
-
-Add your own content above!
-`)
+const content = ref('')
 const saving = ref(false)
 const result = ref(null)
 const error = ref('')
