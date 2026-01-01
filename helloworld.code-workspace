@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../vegvisr-frontend"
+		},
+		{
+			"path": "../Web-Content-Extractor"
+		}
+	],
+	"settings": {}
+}
